@@ -27,7 +27,7 @@ func (server *Minion) serve()  {
 	http.HandleFunc("/cancel", server.handleCancel)
 	http.HandleFunc("/current", server.viewJob)
 	http.HandleFunc("/current-state", server.viewCurrentState)
-	http.ListenAndServe(":8000", nil)
+	http.ListenAndServe("0.0.0.0:8000", nil)
 }
 
 func (server *Minion) GetNextJob() *Job {

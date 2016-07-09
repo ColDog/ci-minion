@@ -1,12 +1,22 @@
 FROM golang:latest
 
-RUN mkdir /app
+RUN apt-get update -qq && apt-get install -qqy \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    lxc \
+    iptables
 
-RUN go version
+RUN curl -sSL https://get.docker.com/ | sh
+RUN sudo usermod -aG docker root
+
 ADD . /go/src/app/
 WORKDIR /go/src/app/
 
-RUN echo $GOPATH
 RUN go get ./...
-RUN go build -o main .
-CMD ["/app/main"]
+RUN go build -o /go/bin/main .
+
+RUN go version
+
+EXPOSE 8000
+CMD ["/go/bin/main"]

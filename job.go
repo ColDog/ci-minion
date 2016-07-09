@@ -205,6 +205,7 @@ func (job *Job) Run() {
 func (job *Job) Quit() {
 	job.Cancelled = true
 	job.quit <- true
+	job.Cleanup()
 }
 
 func (job *Job) Serialize() []byte {
