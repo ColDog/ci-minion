@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"reflect"
+	"encoding/json"
 )
 
 const LOG_OUTPUT bool = false
@@ -22,9 +23,23 @@ type CommandResult struct {
 	Error 		error
 }
 
-func execute(main string, args ...string) CommandResult {
+func execute(quit chan bool, main string, args ...string) CommandResult {
+	done := make(chan bool)
 	cmd := exec.Command(main, args...)
+
+	go func() {
+		select {
+		case <- quit:
+			cmd.Process.Kill()
+			return
+		case <- done:
+			close(done)
+			return
+		}
+	}()
+
 	output, err := cmd.CombinedOutput()
+	done <- true
 
 	log.Printf("executing: %s %s err: %v", main, strings.Join(args, " "), err)
 
@@ -78,8 +93,11 @@ type Job struct {
 	BuildFolder 	string
 	Build		Build
 	Failed 		bool
+	Cancelled 	bool
 	FailureOutput 	string
 	Commands 	map[string] []CommandResult
+	quit 		chan bool
+	finished 	chan bool
 }
 
 func NewJob(id string, repo Repo) *Job {
@@ -87,6 +105,8 @@ func NewJob(id string, repo Repo) *Job {
 		JobId: id,
 		Repo: repo,
 		Commands: make(map[string] []CommandResult),
+		quit: make(chan bool),
+		finished: make(chan bool),
 	}
 }
 
@@ -98,7 +118,7 @@ func (job *Job) add(topic string, res CommandResult) {
 }
 
 func (job *Job) execute(topic string, main string, args ...string) bool {
-	res := execute(main, args...)
+	res := execute(job.quit, main, args...)
 	job.add(topic, res)
 	return res.Error == nil
 }
@@ -157,7 +177,7 @@ func (job *Job) Provision() bool {
 
 func (job *Job) Clone() bool {
 	cwd, _ := os.Getwd()
-	job.BuildFolder = cwd + "/" + job.Repo.Project
+	job.BuildFolder = cwd + "/builds/" + job.Repo.Project
 	job.execute("clone", "rm", "-rf", job.Repo.Project)
 	return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
 }
@@ -226,20 +246,15 @@ func (job *Job) Run() {
 	}
 }
 
-func main()  {
-	repo := Repo{
-		Branch: "master",
-		Provider: "github",
-		Organization: "coldog",
-		Project: "ci-sample",
+func (job *Job) Quit() {
+	job.quit <- true
+	job.Cancelled = true
+}
+
+func (job *Job) Serialize()  {
+	res, err := json.Marshal(job)
+	if err != nil {
+		panic(err)
 	}
-
-	job := NewJob("test1", repo)
-
-	job.Run()
-	//res, err := json.MarshalIndent(job, "", "  ")
-	//if err != nil {
-	//	panic(err)
-	//}
-	//fmt.Printf("\n\n%s\n", res)
+	fmt.Printf("\n\n%s\n", res)
 }
