@@ -1,13 +1,11 @@
-FROM golang:1.6
+FROM golang:latest
 
-RUN apt-get update
-RUN apt-get -y install apt-transport-https ca-certificates
-RUN apt-get -y install docker.io
+RUN mkdir /app
 
-ADD . /go/src/github.com/golang/coldog/minion
+ADD . /app/
+WORKDIR /app
 
-RUN go install github.com/golang/coldog/minion
-
-ENTRYPOINT /go/bin/minion
-
-EXPOSE 8000
+RUN go get ./...
+RUN go build -o main .
+CMD ["/app/main"]
+ex

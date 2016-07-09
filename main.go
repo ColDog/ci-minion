@@ -1,8 +1,9 @@
 package main
 
-import "github.com/coldog/minion/minion"
+const LOG_OUTPUT bool = false
+
 
 func main()  {
-	minion := minion.NewMinion()
+	minion := NewMinion()
 	minion.Start()
 }
