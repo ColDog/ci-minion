@@ -1,0 +1,65 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;minion&gt;">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/../../../golang.org" />
+      <root url="file://$PROJECT_DIR$/../.." />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+    <excluded>
+      <root url="file://$PROJECT_DIR$/../../ddliu/go-httpclient/.git" />
+      <root url="file://$PROJECT_DIR$/../../golang/snappy/testdata" />
+      <root url="file://$PROJECT_DIR$/../dcs/.vagrant" />
+      <root url="file://$PROJECT_DIR$/../../golang/snappy/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/.git" />
+      <root url="file://$PROJECT_DIR$/../proxy/.idea" />
+      <root url="file://$PROJECT_DIR$/../../pborman/uuid/.git" />
+      <root url="file://$PROJECT_DIR$/../../../golang.org/x/crypto/ssh/testdata" />
+      <root url="file://$PROJECT_DIR$/../../../golang.org/x/crypto/ed25519/testdata" />
+      <root url="file://$PROJECT_DIR$/../../pebbe/zmq4/.git" />
+      <root url="file://$PROJECT_DIR$/../proxy/.git" />
+      <root url="file://$PROJECT_DIR$/../messaging/.idea" />
+      <root url="file://$PROJECT_DIR$/../../docker/libchan/.git" />
+      <root url="file://$PROJECT_DIR$/../../dmcgowan/msgpack/.git" />
+      <root url="file://$PROJECT_DIR$/../../julienschmidt/httprouter/.git" />
+      <root url="file://$PROJECT_DIR$/../../go-redis/redis/testdata" />
+      <root url="file://$PROJECT_DIR$/../eb_tx/.idea" />
+      <root url="file://$PROJECT_DIR$/ci-sample/.git" />
+      <root url="file://$PROJECT_DIR$/../../docker/spdystream/.git" />
+      <root url="file://$PROJECT_DIR$/../raft/.git" />
+      <root url="file://$PROJECT_DIR$/../raft/.idea" />
+      <root url="file://$PROJECT_DIR$/../../davecgh/go-spew/.git" />
+      <root url="file://$PROJECT_DIR$/../../go-redis/redis/.git" />
+      <root url="file://$PROJECT_DIR$/../kdb/.idea" />
+      <root url="file://$PROJECT_DIR$/../../lib/pq/.git" />
+      <root url="file://$PROJECT_DIR$/../kdb/.git" />
+      <root url="file://$PROJECT_DIR$/../mq/.idea" />
+      <root url="file://$PROJECT_DIR$/../graphs/.idea" />
+      <root url="file://$PROJECT_DIR$/../mraft/.idea" />
+      <root url="file://$PROJECT_DIR$/../../davecgh/go-spew/spew/testdata" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/yaml.v2/.git" />
+      <root url="file://$PROJECT_DIR$/../graph/.idea" />
+      <root url="file://$PROJECT_DIR$/../../dgrijalva/jwt-go/.git" />
+      <root url="file://$PROJECT_DIR$/../dcs/.idea" />
+      <root url="file://$PROJECT_DIR$/../../hashicorp/yamux/.git" />
+      <root url="file://$PROJECT_DIR$/../messaging/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/bsm/ratelimit.v1/.git" />
+      <root url="file://$PROJECT_DIR$/../../syndtr/goleveldb/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/fatih/pool.v2/.git" />
+      <root url="file://$PROJECT_DIR$/../../../golang.org/x/crypto/sha3/testdata" />
+      <root url="file://$PROJECT_DIR$/../mq/.git" />
+      <root url="file://$PROJECT_DIR$/../gdb/.idea" />
+      <root url="file://$PROJECT_DIR$/../distributed_testing/.idea" />
+      <root url="file://$PROJECT_DIR$/../../satori/go.uuid/.git" />
+      <root url="file://$PROJECT_DIR$/.idea" />
+      <root url="file://$PROJECT_DIR$" />
+      <root url="file://$PROJECT_DIR$/../../alecthomas/gozmq/.git" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/redis.v3/testdata" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in/vmihailenco/msgpack.v2/.git" />
+      <root url="file://$PROJECT_DIR$/../../boltdb/bolt/.git" />
+      <root url="file://$PROJECT_DIR$/../../google/btree/.git" />
+      <root url="file://$PROJECT_DIR$/../../../golang.org/x/crypto/.git" />
+    </excluded>
+  </library>
+</component>
