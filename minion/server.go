@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"fmt"
 )
 
 type Minion struct {
@@ -13,7 +14,7 @@ func (server *Minion) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *Minion) Serve()  {
-	http.HandleFunc("/", server.Handle)
+	http.HandleFunc("/cancel", server.Handle)
 	http.ListenAndServe(":8000", nil)
 }
 
@@ -37,6 +38,8 @@ func (server *Minion) Run() {
 
 		select {
 		case job.finished:
+			out := job.Serialize()
+			fmt.Printf("\n%s\n", out)
 			continue
 
 		case server.cancel:
@@ -46,4 +49,5 @@ func (server *Minion) Run() {
 }
 
 func main() {
+
 }

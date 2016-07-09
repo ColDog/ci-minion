@@ -178,7 +178,7 @@ func (job *Job) Provision() bool {
 func (job *Job) Clone() bool {
 	cwd, _ := os.Getwd()
 	job.BuildFolder = cwd + "/builds/" + job.Repo.Project
-	job.execute("clone", "rm", "-rf", job.Repo.Project)
+	job.execute("clone", "rm", "-rf", job.BuildFolder)
 	return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
 }
 
@@ -203,7 +203,7 @@ func (job *Job) RunTests() bool {
 
 func (job *Job) RunPost() bool {
 	for _, cmd := range job.Build.PostTest {
-		job.execInsideSh("test", cmd)
+		job.execInsideSh("post_test", cmd)
 	}
 	return true
 }
@@ -211,11 +211,11 @@ func (job *Job) RunPost() bool {
 func (job *Job) RunHooks() bool {
 	if !job.Failed {
 		for _, cmd := range job.Build.OnSuccess {
-			job.execInsideSh("test", cmd)
+			job.execInsideSh("on_success", cmd)
 		}
 	} else {
 		for _, cmd := range job.Build.OnFailure {
-			job.execInsideSh("test", cmd)
+			job.execInsideSh("on_failure", cmd)
 		}
 	}
 
@@ -225,6 +225,7 @@ func (job *Job) RunHooks() bool {
 func (job *Job) Cleanup() bool {
 	job.execute("cleanup", "docker", "stop", job.JobId)
 	job.execute("cleanup", "docker", "rm", job.JobId)
+	job.execute("cleanup", "rm", "-rf", job.BuildFolder)
 	return true
 }
 
@@ -251,10 +252,10 @@ func (job *Job) Quit() {
 	job.Cancelled = true
 }
 
-func (job *Job) Serialize()  {
+func (job *Job) Serialize() []byte {
 	res, err := json.Marshal(job)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("\n\n%s\n", res)
+	return res
 }
