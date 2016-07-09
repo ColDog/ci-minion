@@ -56,7 +56,7 @@ func NewJob(id string, repo Repo) *Job {
 		JobId: id,
 		Repo: repo,
 		Commands: make(map[string] []CommandResult),
-		quit: make(chan bool),
+		quit: make(chan bool, 1),
 		finished: make(chan bool),
 	}
 }
@@ -77,25 +77,29 @@ func (job *Job) execute(topic string, main string, args ...string) bool {
 func (job *Job) execInside(topic string, main string, args ...string) bool {
 	cmds := []string{"exec", job.JobId, main}
 	cmds = append(cmds, args...)
-	res := execute("docker", cmds...)
+	res := execute(job.quit, "docker", cmds...)
 	job.add(topic, res)
 	return res.Error == nil
 }
 
 func (job *Job) execInsideSh(topic string, sh string) bool {
-	res := execute("docker", "exec", job.JobId, "/bin/sh", "-c", sh)
+	res := execute(job.quit, "docker", "exec", job.JobId, "/bin/sh", "-c", sh)
 	job.add(topic, res)
 	return res.Error == nil
 }
 
 func (job *Job) execInsideShOut(topic string, sh string) (string, bool) {
-	res := execute("docker", "exec", job.JobId, "/bin/sh", "-c", sh)
+	res := execute(job.quit, "docker", "exec", job.JobId, "/bin/sh", "-c", sh)
 	job.add(topic, res)
 	return res.Output, res.Error == nil
 }
 
 func (job *Job) run(stages []Stage) bool {
 	for i, stage := range stages {
+		if job.Cancelled {
+			return false
+		}
+
 		log.Printf("step: %v %s", i, FuncName(stage))
 		ok := stage()
 		if !ok {
@@ -199,8 +203,8 @@ func (job *Job) Run() {
 }
 
 func (job *Job) Quit() {
-	job.quit <- true
 	job.Cancelled = true
+	job.quit <- true
 }
 
 func (job *Job) Serialize() []byte {

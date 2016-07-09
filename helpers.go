@@ -16,7 +16,7 @@ type CommandResult struct {
 }
 
 func execute(quit chan bool, main string, args ...string) CommandResult {
-	done := make(chan bool)
+	done := make(chan bool, 1)
 	cmd := exec.Command(main, args...)
 
 	go func() {
@@ -25,7 +25,6 @@ func execute(quit chan bool, main string, args ...string) CommandResult {
 			cmd.Process.Kill()
 			return
 		case <- done:
-			close(done)
 			return
 		}
 	}()
