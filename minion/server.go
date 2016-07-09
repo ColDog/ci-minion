@@ -1,4 +1,4 @@
-package main
+package minion
 
 import (
 	"net/http"
@@ -9,12 +9,12 @@ type Minion struct {
 	cancel 		chan bool
 }
 
-func (server *Minion) Handle(w http.ResponseWriter, r *http.Request) {
+func (server *Minion) handle(w http.ResponseWriter, r *http.Request) {
 	server.cancel <- true
 }
 
-func (server *Minion) Serve()  {
-	http.HandleFunc("/cancel", server.Handle)
+func (server *Minion) serve()  {
+	http.HandleFunc("/cancel", server.handle)
 	http.ListenAndServe(":8000", nil)
 }
 
@@ -31,7 +31,7 @@ func (server *Minion) GetNextJob() *Job {
 	return job
 }
 
-func (server *Minion) Run() {
+func (server *Minion) run() {
 	for {
 		job := server.GetNextJob()
 		go job.Run()
@@ -48,6 +48,13 @@ func (server *Minion) Run() {
 	}
 }
 
-func main() {
+func (server *Minion) Start() {
+	go server.serve()
+	server.run()
+}
 
+func NewMinion() *Minion {
+	return Minion{
+		cancel: make(chan bool),
+	}
 }
