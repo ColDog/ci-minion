@@ -3,11 +3,14 @@ package main
 import (
 	"net/http"
 	"fmt"
+	"time"
 )
 
 type Minion struct {
 	cancel 		chan bool
 	current		*Job
+	api 		string
+	host 		string
 }
 
 func (server *Minion) handleCancel(w http.ResponseWriter, r *http.Request) {
@@ -23,45 +26,64 @@ func (server *Minion) viewCurrentState(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(server.current.Serialize()))
 }
 
-func (server *Minion) serve()  {
+func (server *Minion) serve(port string)  {
 	http.HandleFunc("/cancel", server.handleCancel)
 	http.HandleFunc("/current", server.viewJob)
 	http.HandleFunc("/current-state", server.viewCurrentState)
-	http.ListenAndServe("0.0.0.0:8000", nil)
+	http.ListenAndServe("0.0.0.0:" + port, nil)
 }
 
-func (server *Minion) GetNextJob() *Job {
-	repo := Repo{
-		Branch: "master",
-		Provider: "github",
-		Organization: "coldog",
-		Project: "ci-sample",
+func (server *Minion) next() *Job {
+	data, err := post(server.api + "/jobs", map[string] interface{} {
+		"worker": server.host,
+	})
+	if err != nil {
+		panic(err)
 	}
 
-	job := NewJob("test1", repo)
+	repo := Repo{
+		Branch: data["branch"].(string),
+		Provider: data["provider"].(string),
+		Organization: data["org"].(string),
+		Project: data["project"].(string),
+	}
 
+	job := NewJob(data["key"].(string), repo)
 	return job
 }
 
 func (server *Minion) run() {
 	for {
-		server.current = server.GetNextJob()
+		server.current = server.next()
 		go server.current.Run()
 
 		select {
 		case <- server.current.finished:
-			out := server.current.Serialize()
-			fmt.Printf("\n%s\n", out)
 			continue
 
 		case <- server.cancel:
 			server.current.Quit()
 		}
+
+		// todo: save the output to permanent storage
+		out := server.current.Serialize()
+		fmt.Printf("\n%s\n", out)
+
+		// update the app
+		patch(server.api + "/jobs/" + server.current.JobId, map[string] interface{} {
+			"completed": true,
+			"cancelled": server.current.Cancelled,
+			"failed": server.current.Failed,
+			"failure": server.current.FailureOutput,
+		})
+
+		// sleep before starting up again
+		time.Sleep(5 * time.Second)
 	}
 }
 
-func (server *Minion) Start() {
-	go server.serve()
+func (server *Minion) Start(port string) {
+	go server.serve(port)
 	server.run()
 }
 

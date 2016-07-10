@@ -184,9 +184,18 @@ func (job *Job) Cleanup() bool {
 	return true
 }
 
+func (job *Job) Sandbox() {
+	job.run([]Stage{
+		job.Clone,
+		job.GetBuild,
+		job.Provision,
+		job.RunPre,
+		job.RunTests,
+	})
+}
+
 func (job *Job) Run() {
 	ok := job.run([]Stage{
-		job.Cleanup,
 		job.Clone,
 		job.GetBuild,
 		job.Provision,
