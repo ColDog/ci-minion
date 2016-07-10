@@ -87,8 +87,10 @@ func (server *Minion) Start(port string) {
 	server.run()
 }
 
-func NewMinion() *Minion {
+func NewMinion(api, host string) *Minion {
 	return &Minion{
+		host: host,
+		api: api,
 		cancel: make(chan bool),
 	}
 }

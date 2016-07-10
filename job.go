@@ -30,6 +30,7 @@ func (repo Repo) Url() string {
 }
 
 type Build struct  {
+	Env 		[]string	`yaml:"env"`
 	BaseImage	string		`yaml:"base_image"`
 	PreTest		[]string	`yaml:"pre_test"`
 	Test 		[]string	`yaml:"test"`
@@ -47,15 +48,17 @@ type Job struct {
 	Cancelled 	bool
 	FailureOutput 	string
 	Commands 	map[string] []CommandResult
+	config 		map[string] interface{}
 	quit 		chan bool
 	finished 	chan bool
 }
 
-func NewJob(id string, repo Repo) *Job {
+func NewJob(id string, repo Repo, config map[string] interface{}) *Job {
 	return &Job{
 		JobId: id,
 		Repo: repo,
 		Commands: make(map[string] []CommandResult),
+		config: config,
 		quit: make(chan bool, 1),
 		finished: make(chan bool),
 	}
@@ -127,7 +130,14 @@ func (job *Job) Provision() bool {
 	job.execute("provision", "docker", "stop", job.JobId)
 	job.execute("provision", "docker", "rm", job.JobId)
 	job.execute("provision", "docker", "pull", job.Build.BaseImage)
-	return job.execute("provision", "docker", "run", "-it", "-d", "-v", job.BuildFolder + ":/opt/ci", "--name=" + job.JobId, job.Build.BaseImage)
+
+	run := []string{"run", "-it", "-d", "-v", job.BuildFolder + ":/opt/ci", "--name=" + job.JobId}
+	for _, e := range job.Build.Env {
+		run = append(run, "-e", e)
+	}
+	run = append(run, job.Build.BaseImage)
+
+	return job.execute("provision", "docker", run...)
 }
 
 func (job *Job) Clone() bool {
