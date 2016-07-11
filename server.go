@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"fmt"
 	"time"
+	"log"
 )
 
 type Minion struct {
@@ -34,21 +35,21 @@ func (server *Minion) serve(port string)  {
 }
 
 func (server *Minion) next() *Job {
-	data, err := post(server.api + "/jobs", map[string] interface{} {
+	conf := struct {
+		Job 	BuildConfig 	`json:"job"`
+	}{
+		Job: 	BuildConfig{},
+	}
+
+	err := post(server.api + "/minions/jobs", conf, map[string] interface{} {
 		"worker": server.host,
+		"token": SECRET,
 	})
 	if err != nil {
-		panic(err)
+		log.Printf("error: %v", err)
 	}
 
-	repo := Repo{
-		Branch: data["branch"].(string),
-		Provider: data["provider"].(string),
-		Organization: data["org"].(string),
-		Project: data["project"].(string),
-	}
-
-	job := NewJob(data["key"].(string), repo)
+	job := NewJob(conf.Job.Key, conf.Job.Repo, conf.Job.Build)
 	return job
 }
 
@@ -65,16 +66,17 @@ func (server *Minion) run() {
 			server.current.Quit()
 		}
 
-		// todo: save the output to permanent storage
 		out := server.current.Serialize()
 		fmt.Printf("\n%s\n", out)
 
 		// update the app
-		patch(server.api + "/jobs/" + server.current.JobId, map[string] interface{} {
+		res := make(map[string] interface{})
+		patch(server.api + "/minions/jobs/" + server.current.JobId, res, map[string] interface{} {
 			"completed": true,
 			"cancelled": server.current.Cancelled,
 			"failed": server.current.Failed,
 			"failure": server.current.FailureOutput,
+			"token": SECRET,
 		})
 
 		// sleep before starting up again

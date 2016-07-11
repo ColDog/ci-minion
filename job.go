@@ -4,20 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"io/ioutil"
-	"gopkg.in/yaml.v2"
 	"os"
 )
+
+type BuildConfig struct {
+	Key 		string 		`json:"key"`
+	Build 		Build		`json:"build"`
+	Repo 		Repo		`json:"repo"`
+}
 
 type Stage func() bool
 
 type Repo struct {
-	AuthUser 	string
-	AuthPass	string
-	Provider 	string
-	Branch 		string
-	Organization	string
-	Project 	string
+	AuthUser 	string		`json:"auth_user"`
+	AuthPass	string		`json:"auth_pass"`
+	Provider 	string		`json:"provider"`
+	Branch 		string		`json:"branch"`
+	Organization	string		`json:"org"`
+	Project 	string		`json:"project"`
 }
 
 func (repo Repo) Url() string {
@@ -30,13 +34,13 @@ func (repo Repo) Url() string {
 }
 
 type Build struct  {
-	Env 		[]string	`yaml:"env"`
-	BaseImage	string		`yaml:"base_image"`
-	PreTest		[]string	`yaml:"pre_test"`
-	Test 		[]string	`yaml:"test"`
-	PostTest 	[]string	`yaml:"post_test"`
-	OnSuccess	[]string	`yaml:"on_success"`
-	OnFailure 	[]string	`yaml:"on_failure"`
+	Env 		[]string	`json:"env"`
+	BaseImage	string		`json:"base_image"`
+	PreTest		[]string	`json:"pre_test"`
+	Test 		[]string	`json:"test"`
+	PostTest 	[]string	`json:"post_test"`
+	OnSuccess	[]string	`json:"on_success"`
+	OnFailure 	[]string	`json:"on_failure"`
 }
 
 type Job struct {
@@ -48,17 +52,16 @@ type Job struct {
 	Cancelled 	bool
 	FailureOutput 	string
 	Commands 	map[string] []CommandResult
-	config 		map[string] interface{}
 	quit 		chan bool
 	finished 	chan bool
 }
 
-func NewJob(id string, repo Repo, config map[string] interface{}) *Job {
+func NewJob(id string, repo Repo, build Build) *Job {
 	return &Job{
 		JobId: id,
 		Repo: repo,
+		Build: build,
 		Commands: make(map[string] []CommandResult),
-		config: config,
 		quit: make(chan bool, 1),
 		finished: make(chan bool),
 	}
@@ -108,19 +111,6 @@ func (job *Job) run(stages []Stage) bool {
 		if !ok {
 			return false
 		}
-	}
-
-	return true
-}
-
-func (job *Job) GetBuild() bool {
-	data, err := ioutil.ReadFile(job.BuildFolder + "/ci.yml")
-	if err == nil {
-		b := Build{}
-		yaml.Unmarshal(data, &b)
-		job.Build = b
-		log.Printf("build: %+v", b)
-		return true
 	}
 
 	return true
@@ -197,7 +187,6 @@ func (job *Job) Cleanup() bool {
 func (job *Job) Sandbox() {
 	job.run([]Stage{
 		job.Clone,
-		job.GetBuild,
 		job.Provision,
 		job.RunPre,
 		job.RunTests,
@@ -207,7 +196,6 @@ func (job *Job) Sandbox() {
 func (job *Job) Run() {
 	ok := job.run([]Stage{
 		job.Clone,
-		job.GetBuild,
 		job.Provision,
 		job.RunPre,
 		job.RunTests,
