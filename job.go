@@ -207,6 +207,8 @@ func (job *Job) Run() {
 	if !job.Failed && !ok {
 		job.Failed = true
 	}
+
+	job.finished <- true
 }
 
 func (job *Job) Quit() {

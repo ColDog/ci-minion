@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 	"log"
+	"github.com/parnurzeal/gorequest"
+	"encoding/json"
 )
 
 type Minion struct {
@@ -12,6 +14,7 @@ type Minion struct {
 	current		*Job
 	api 		string
 	host 		string
+	token		string
 }
 
 func (server *Minion) handleCancel(w http.ResponseWriter, r *http.Request) {
@@ -34,50 +37,73 @@ func (server *Minion) serve(port string)  {
 	http.ListenAndServe("0.0.0.0:" + port, nil)
 }
 
-func (server *Minion) next() *Job {
-	conf := struct {
+func (server *Minion) next() (*Job, bool) {
+	conf := &struct {
 		Job 	BuildConfig 	`json:"job"`
-	}{
-		Job: 	BuildConfig{},
+	}{BuildConfig{}}
+
+	req := gorequest.New().
+		Post(server.api + "/minions/jobs").
+		Param("worker", server.host).
+		Param("token", server.token)
+
+	_, body, errs := req.End()
+	if len(errs) > 0 {
+		return &Job{}, false
 	}
 
-	err := post(server.api + "/minions/jobs", conf, map[string] interface{} {
-		"worker": server.host,
-		"token": SECRET,
-	})
+	err := json.Unmarshal([]byte(body), conf)
 	if err != nil {
-		log.Printf("error: %v", err)
+		return &Job{}, false
 	}
 
-	job := NewJob(conf.Job.Key, conf.Job.Repo, conf.Job.Build)
-	return job
+	if conf.Job.Key != "" {
+		job := NewJob(conf.Job.Key, conf.Job.Repo, conf.Job.Build)
+		return job, true
+	} else {
+		return &Job{}, false
+	}
+}
+
+func (server *Minion) save() {
+	//out := server.current.Serialize()
+
+	_, _, errs := gorequest.New().
+		Patch(server.api + "/minions/jobs/" + server.current.JobId).
+		Param("complete", fmt.Sprintf("%v", true)).
+		Param("cancelled", fmt.Sprintf("%v", server.current.Cancelled)).
+		Param("failed", fmt.Sprintf("%v", server.current.Failed)).
+		Param("failure", server.current.FailureOutput).
+		Param("token", server.token).
+		End()
+
+	if len(errs) > 0 {
+		panic(errs[0])
+	}
 }
 
 func (server *Minion) run() {
 	for {
-		server.current = server.next()
+		cur, ok := server.next()
+		if !ok {
+			log.Printf("could not find any new jobs")
+			// sleep before starting up again
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		server.current = cur
 		go server.current.Run()
 
 		select {
 		case <- server.current.finished:
-			continue
+			log.Printf("job finished! %s", server.current.JobId)
 
 		case <- server.cancel:
 			server.current.Quit()
 		}
 
-		out := server.current.Serialize()
-		fmt.Printf("\n%s\n", out)
-
-		// update the app
-		res := make(map[string] interface{})
-		patch(server.api + "/minions/jobs/" + server.current.JobId, res, map[string] interface{} {
-			"completed": true,
-			"cancelled": server.current.Cancelled,
-			"failed": server.current.Failed,
-			"failure": server.current.FailureOutput,
-			"token": SECRET,
-		})
+		server.save()
 
 		// sleep before starting up again
 		time.Sleep(5 * time.Second)
@@ -89,10 +115,11 @@ func (server *Minion) Start(port string) {
 	server.run()
 }
 
-func NewMinion(api, host string) *Minion {
+func NewMinion(api, host, token string) *Minion {
 	return &Minion{
 		host: host,
 		api: api,
+		token: token,
 		cancel: make(chan bool),
 	}
 }
