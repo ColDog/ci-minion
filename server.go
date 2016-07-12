@@ -7,6 +7,7 @@ import (
 	"log"
 	"github.com/parnurzeal/gorequest"
 	"encoding/json"
+	"os"
 )
 
 type Minion struct {
@@ -15,6 +16,7 @@ type Minion struct {
 	api 		string
 	host 		string
 	token		string
+	s3 		*S3Client
 }
 
 func (server *Minion) handleCancel(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +68,11 @@ func (server *Minion) next() (*Job, bool) {
 }
 
 func (server *Minion) save() {
-	//out := server.current.Serialize()
+	out := server.current.Serialize()
+	err := server.s3.Upload(server.current.JobId, out)
+	if err != nil {
+		panic(err)
+	}
 
 	_, _, errs := gorequest.New().
 		Patch(server.api + "/minions/jobs/" + server.current.JobId).
@@ -115,11 +121,15 @@ func (server *Minion) Start(port string) {
 	server.run()
 }
 
-func NewMinion(api, host, token string) *Minion {
+func NewMinion(api, host, token, s3bucket string) *Minion {
+	s3key := os.Getenv("AWS_ACCESS_KEY_ID")
+	s3secret := os.Getenv("AWS_SECRET_KEY_ID")
+
 	return &Minion{
 		host: host,
 		api: api,
 		token: token,
+		s3: NewS3Client(s3key, s3secret, s3bucket),
 		cancel: make(chan bool),
 	}
 }
