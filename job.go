@@ -211,6 +211,10 @@ func (job *Job) Run() {
 	job.finished <- true
 }
 
+func (job *Job) Wait() {
+	<- job.finished
+}
+
 func (job *Job) Quit() {
 	job.Cancelled = true
 	job.quit <- true

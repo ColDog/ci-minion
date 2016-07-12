@@ -8,6 +8,8 @@ import (
 	"github.com/parnurzeal/gorequest"
 	"encoding/json"
 	"os"
+	"github.com/go-amz/amz/s3"
+	"gopkg.in/amz.v1/aws"
 )
 
 type Minion struct {
@@ -16,7 +18,7 @@ type Minion struct {
 	api 		string
 	host 		string
 	token		string
-	s3 		*S3Client
+	s3 		*s3.Bucket
 }
 
 func (server *Minion) handleCancel(w http.ResponseWriter, r *http.Request) {
@@ -69,9 +71,12 @@ func (server *Minion) next() (*Job, bool) {
 
 func (server *Minion) save() {
 	out := server.current.Serialize()
-	err := server.s3.Upload(server.current.JobId, out)
+	err := server.s3.Put(server.current.JobId, out, "application/json", s3.ACL("public-read"))
 	if err != nil {
+		log.Printf("Could not upload file %v", err)
 		panic(err)
+	} else {
+		log.Printf("uploaded file to %s", server.current.JobId)
 	}
 
 	_, _, errs := gorequest.New().
@@ -84,6 +89,7 @@ func (server *Minion) save() {
 		End()
 
 	if len(errs) > 0 {
+		log.Printf("Could not patch updates %s %v", server.api, errs[0])
 		panic(errs[0])
 	}
 }
@@ -116,20 +122,31 @@ func (server *Minion) run() {
 	}
 }
 
-func (server *Minion) Start(port string) {
-	go server.serve(port)
+func (server *Minion) Start() {
+	go server.serve(os.Getenv("MINION_PORT"))
 	server.run()
 }
 
-func NewMinion(api, host, token, s3bucket string) *Minion {
-	s3key := os.Getenv("AWS_ACCESS_KEY_ID")
-	s3secret := os.Getenv("AWS_SECRET_KEY_ID")
+func NewMinion() *Minion {
+	s3region := os.Getenv("MINION_S3_REGION")
+	reg, ok := aws.Regions[s3region]
+	if !ok {
+		panic(s3region + " is not a region")
+	}
+
+	auth := aws.Auth{
+		AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"),
+		SecretKey: os.Getenv("AWS_SECRET_KEY_ID"),
+	}
+
+	conn := s3.New(auth, reg)
+	bucket := conn.Bucket(os.Getenv("MINION_S3_BUCKET"))
 
 	return &Minion{
-		host: host,
-		api: api,
-		token: token,
-		s3: NewS3Client(s3key, s3secret, s3bucket),
+		host: os.Getenv("MINION_HOST"),
+		api: os.Getenv("MINION_API"),
+		token: os.Getenv("MINION_TOKEN"),
+		s3: bucket,
 		cancel: make(chan bool),
 	}
 }

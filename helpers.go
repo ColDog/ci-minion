@@ -6,10 +6,7 @@ import (
 	"strings"
 	"runtime"
 	"reflect"
-	"net/http"
-
-	"gopkg.in/amz.v1/s3"
-	"gopkg.in/amz.v1/aws"
+	"os"
 )
 
 type CommandResult struct {
@@ -54,31 +51,10 @@ func FuncName(i interface{}) string {
 	return strings.Split(sa, "-")[0]
 }
 
-
-func NewS3Client(key, secret, region string)  {
-	reg, ok := aws.Regions[region]
-	if !ok {
-		panic(region + " is not a region")
+func validateEnvVars(vars []string) {
+	for _, v := range vars {
+		if os.Getenv(v) == "" {
+			panic("Could not find environment variable " + v)
+		}
 	}
-
-	auth := aws.Auth{
-		AccessKey: key, // change this to yours
-		SecretKey: secret,
-	}
-
-	return &S3Client{
-		Client: s3.New(auth, reg),
-	}
-}
-
-type S3Client struct {
-	BucketName 	string
-	Client 		*s3.S3
-}
-
-func (client *S3Client) Upload(path string, bytes []byte) error {
-	filetype := http.DetectContentType(bytes)
-
-	bucket := client.Client.Bucket(client.BucketName)
-	return bucket.Put(path, bytes, filetype, s3.ACL("public-read"))
 }

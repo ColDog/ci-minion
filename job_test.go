@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-func TestSampleJob(t *testing.T) {
+func testJob() *Job {
 	repo := Repo{
 		Provider: "github",
 		Branch: "master",
@@ -19,6 +19,11 @@ func TestSampleJob(t *testing.T) {
 		OnFailure: []string{"echo 'failure :('"},
 	}
 
-	job := NewJob("test", repo, build)
-	job.Run()
+	return NewJob("test", repo, build)
+}
+
+func TestSampleJob(t *testing.T) {
+	job := testJob()
+	go job.Run()
+	job.Wait()
 }
