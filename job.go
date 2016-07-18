@@ -36,15 +36,16 @@ func (repo Repo) Url() string {
 type Build struct  {
 	Env 		[]string	`json:"env"`
 	BaseImage	string		`json:"base_image"`
-	PreTest		[]string	`json:"pre_test"`
-	Test 		[]string	`json:"test"`
-	PostTest 	[]string	`json:"post_test"`
+	Before		[]string	`json:"before"`
+	Main 		[]string	`json:"main"`
+	After 		[]string	`json:"after"`
 	OnSuccess	[]string	`json:"on_success"`
 	OnFailure 	[]string	`json:"on_failure"`
 }
 
 type Job struct {
 	JobId		string
+	JobFamily 	string
 	Repo 		Repo
 	BuildFolder 	string
 	Build		Build
@@ -134,19 +135,23 @@ func (job *Job) Clone() bool {
 	cwd, _ := os.Getwd()
 	job.BuildFolder = cwd + "/builds/" + job.Repo.Project
 	job.execute("clone", "rm", "-rf", job.BuildFolder)
-	return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
+	if job.Repo.Project != "" {
+		return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
+	} else {
+		return true
+	}
 }
 
 func (job *Job) RunPre() bool {
-	for _, cmd := range job.Build.PreTest {
-		job.execInsideSh("pre_test", cmd)
+	for _, cmd := range job.Build.Before {
+		job.execInsideSh("before", cmd)
 	}
 	return true
 }
 
 func (job *Job) RunTests() bool {
-	for _, cmd := range job.Build.Test {
-		out, ok := job.execInsideShOut("test", cmd)
+	for _, cmd := range job.Build.Main {
+		out, ok := job.execInsideShOut("main", cmd)
 		if !ok {
 			job.Failed = true
 			job.FailureOutput = out
@@ -157,8 +162,8 @@ func (job *Job) RunTests() bool {
 }
 
 func (job *Job) RunPost() bool {
-	for _, cmd := range job.Build.PostTest {
-		job.execInsideSh("post_test", cmd)
+	for _, cmd := range job.Build.After {
+		job.execInsideSh("after", cmd)
 	}
 	return true
 }

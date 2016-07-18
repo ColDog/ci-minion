@@ -22,15 +22,18 @@ type Minion struct {
 }
 
 func (server *Minion) handleCancel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	server.cancel <- true
 }
 
 func (server *Minion) viewJob(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write([]byte(server.current.JobId))
 }
 
 func (server *Minion) viewCurrentState(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write([]byte(server.current.Serialize()))
 }
 
@@ -71,13 +74,16 @@ func (server *Minion) next() (*Job, bool) {
 
 func (server *Minion) save() {
 	out := server.current.Serialize()
-	err := server.s3.Put(server.current.JobId, out, "application/json", s3.ACL("public-read"))
+	path := fmt.Sprintf("builds/%s/%s", server.current.JobFamily, server.current.JobId)
+	err := server.s3.Put(path, out, "application/json", s3.ACL("public-read"))
 	if err != nil {
 		log.Printf("Could not upload file %v", err)
 		panic(err)
 	} else {
 		log.Printf("uploaded file to %s", server.current.JobId)
 	}
+
+	bucket := os.Getenv("MINION_S3_BUCKET")
 
 	_, _, errs := gorequest.New().
 		Patch(server.api + "/minions/jobs/" + server.current.JobId).
@@ -86,6 +92,7 @@ func (server *Minion) save() {
 		Param("failed", fmt.Sprintf("%v", server.current.Failed)).
 		Param("failure", server.current.FailureOutput).
 		Param("token", server.token).
+		Param("stored_output_url", fmt.Sprintf("https://s3-%s.amazonaws.com/%s/%s", server.s3.Region.Name, bucket, path)).
 		End()
 
 	if len(errs) > 0 {

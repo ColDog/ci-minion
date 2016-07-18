@@ -13,8 +13,9 @@ func testJob() *Job {
 	build := Build{
 		Env: []string{"TEST=true"},
 		BaseImage: "ubuntu",
-		PreTest: []string{"echo 'pre test'"},
-		Test: []string{"echo 'test'"},
+		Before: []string{"echo 'pre test'"},
+		Main: []string{"echo 'test'"},
+		After: []string{"echo 'after'"},
 		OnSuccess: []string{"echo 'success!'"},
 		OnFailure: []string{"echo 'failure :('"},
 	}
