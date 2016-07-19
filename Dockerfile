@@ -8,7 +8,7 @@ RUN apt-get update -qq && apt-get install -qqy \
     iptables
 
 RUN curl -sSL https://get.docker.com/ | sh
-RUN sudo usermod -aG docker root
+#RUN sudo usermod -aG docker root
 
 ADD . /go/src/app/
 WORKDIR /go/src/app/

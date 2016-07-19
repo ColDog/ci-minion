@@ -32,11 +32,11 @@ func execute(quit chan bool, main string, args ...string) CommandResult {
 	output, err := cmd.CombinedOutput()
 	done <- true
 
-	log.Printf("executing: %s %s err: %v", main, strings.Join(args, " "), err)
+	log.Printf("executing: `%s %s` err: %v", main, strings.Join(args, " "), err)
 
-	if LOG_OUTPUT {
+	//if Config.LogOutput {
 		log.Printf("output: %s", output)
-	}
+	//}
 
 	return CommandResult{
 		Args: args,

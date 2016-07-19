@@ -13,6 +13,7 @@ func testJob() *Job {
 	build := Build{
 		Env: []string{"TEST=true"},
 		BaseImage: "ubuntu",
+		Services: []string{"mysql:5.7"},
 		Before: []string{"echo 'pre test'"},
 		Main: []string{"echo 'test'"},
 		After: []string{"echo 'after'"},

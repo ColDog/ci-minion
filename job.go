@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 type BuildConfig struct {
@@ -36,6 +37,7 @@ func (repo Repo) Url() string {
 type Build struct  {
 	Env 		[]string	`json:"env"`
 	BaseImage	string		`json:"base_image"`
+	Services 	[]string        `json:"services"`
 	Before		[]string	`json:"before"`
 	Main 		[]string	`json:"main"`
 	After 		[]string	`json:"after"`
@@ -117,12 +119,26 @@ func (job *Job) run(stages []Stage) bool {
 	return true
 }
 
+func (job *Job) StartServices() bool {
+	job.execute("services", "docker", "network", "create", job.JobId + "-network")
+
+	for _, service := range job.Build.Services {
+		spl := strings.Split(service, ":")
+		ok := job.execute("services", "docker", "run", "-it", "--net=" + job.JobId + "-network", "--name=" + spl[0], "--net-alias=" + spl[0], service)
+		if !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (job *Job) Provision() bool {
 	job.execute("provision", "docker", "stop", job.JobId)
 	job.execute("provision", "docker", "rm", job.JobId)
 	job.execute("provision", "docker", "pull", job.Build.BaseImage)
 
-	run := []string{"run", "-it", "-d", "-v", job.BuildFolder + ":/opt/ci", "--name=" + job.JobId}
+	run := []string{"run", "-it", "-d", "-v", job.BuildFolder + ":/opt/ci", "--name=" + job.JobId, "--net=" + job.JobId + "-network", "--net-alias=main"}
 	for _, e := range job.Build.Env {
 		run = append(run, "-e", e)
 	}
@@ -149,7 +165,7 @@ func (job *Job) RunPre() bool {
 	return true
 }
 
-func (job *Job) RunTests() bool {
+func (job *Job) RunMain() bool {
 	for _, cmd := range job.Build.Main {
 		out, ok := job.execInsideShOut("main", cmd)
 		if !ok {
@@ -194,16 +210,17 @@ func (job *Job) Sandbox() {
 		job.Clone,
 		job.Provision,
 		job.RunPre,
-		job.RunTests,
+		job.RunMain,
 	})
 }
 
 func (job *Job) Run() {
 	ok := job.run([]Stage{
 		job.Clone,
+		job.StartServices,
 		job.Provision,
 		job.RunPre,
-		job.RunTests,
+		job.RunMain,
 		job.RunPost,
 		job.RunHooks,
 		job.Cleanup,

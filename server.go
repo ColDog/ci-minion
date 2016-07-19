@@ -7,7 +7,6 @@ import (
 	"log"
 	"github.com/parnurzeal/gorequest"
 	"encoding/json"
-	"os"
 	"github.com/go-amz/amz/s3"
 	"gopkg.in/amz.v1/aws"
 )
@@ -16,7 +15,7 @@ type Minion struct {
 	cancel 		chan bool
 	current		*Job
 	api 		string
-	host 		string
+	hostapi 	string
 	token		string
 	s3 		*s3.Bucket
 }
@@ -37,11 +36,11 @@ func (server *Minion) viewCurrentState(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(server.current.Serialize()))
 }
 
-func (server *Minion) serve(port string)  {
+func (server *Minion) serve()  {
 	http.HandleFunc("/cancel", server.handleCancel)
 	http.HandleFunc("/current", server.viewJob)
 	http.HandleFunc("/current-state", server.viewCurrentState)
-	http.ListenAndServe("0.0.0.0:" + port, nil)
+	http.ListenAndServe(server.hostapi, nil)
 }
 
 func (server *Minion) next() (*Job, bool) {
@@ -51,7 +50,7 @@ func (server *Minion) next() (*Job, bool) {
 
 	req := gorequest.New().
 		Post(server.api + "/minions/jobs").
-		Param("worker", server.host).
+		Param("worker", server.hostapi).
 		Param("token", server.token)
 
 	_, body, errs := req.End()
@@ -83,8 +82,6 @@ func (server *Minion) save() {
 		log.Printf("uploaded file to %s", server.current.JobId)
 	}
 
-	bucket := os.Getenv("MINION_S3_BUCKET")
-
 	_, _, errs := gorequest.New().
 		Patch(server.api + "/minions/jobs/" + server.current.JobId).
 		Param("complete", fmt.Sprintf("%v", true)).
@@ -92,12 +89,12 @@ func (server *Minion) save() {
 		Param("failed", fmt.Sprintf("%v", server.current.Failed)).
 		Param("failure", server.current.FailureOutput).
 		Param("token", server.token).
-		Param("stored_output_url", fmt.Sprintf("https://s3-%s.amazonaws.com/%s/%s", server.s3.Region.Name, bucket, path)).
+		Param("stored_output_url", fmt.Sprintf("https://s3-%s.amazonaws.com/%s/%s", server.s3.Region.Name, Config.S3Bucket, path)).
 		End()
 
 	if len(errs) > 0 {
 		log.Printf("Could not patch updates %s %v", server.api, errs[0])
-		panic(errs[0])
+		//panic(errs[0])
 	}
 }
 
@@ -130,29 +127,28 @@ func (server *Minion) run() {
 }
 
 func (server *Minion) Start() {
-	go server.serve(os.Getenv("MINION_PORT"))
+	go server.serve()
 	server.run()
 }
 
 func NewMinion() *Minion {
-	s3region := os.Getenv("MINION_S3_REGION")
-	reg, ok := aws.Regions[s3region]
+	reg, ok := aws.Regions[Config.S3Region]
 	if !ok {
-		panic(s3region + " is not a region")
+		panic(Config.S3Region + " is not a region")
 	}
 
 	auth := aws.Auth{
-		AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"),
-		SecretKey: os.Getenv("AWS_SECRET_KEY_ID"),
+		AccessKey: Config.AwsAccessKeyID,
+		SecretKey: Config.AwsSecretKeyID,
 	}
 
 	conn := s3.New(auth, reg)
-	bucket := conn.Bucket(os.Getenv("MINION_S3_BUCKET"))
+	bucket := conn.Bucket(Config.S3Bucket)
 
 	return &Minion{
-		host: os.Getenv("MINION_HOST"),
-		api: os.Getenv("MINION_API"),
-		token: os.Getenv("MINION_TOKEN"),
+		hostapi: Config.MinionApi,
+		api: Config.SimpleCiApi,
+		token: Config.MinionToken,
 		s3: bucket,
 		cancel: make(chan bool),
 	}
