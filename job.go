@@ -183,15 +183,14 @@ func (job *Job) addEnvVars(cmds []string) []string {
 }
 
 func (job *Job) StartBuildContainer() bool {
-	job.execute("provision_build_container", "docker", "stop", BuildName)
-	job.execute("provision_build_container", "docker", "rm", BuildName)
+	job.execute("provision_build_container", "docker", "rm", "-f", BuildName)
 
-	cmds := []string{"run", "--name=" + BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
+	cmds := []string{"run", "-i", "--name=" + BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
 	for _, env := range job.Build.Env {
 		cmds = append(cmds, "-e", env)
 	}
 	cmds = job.addEnvVars(cmds)
-	cmds = append(cmds, BuildImg)
+	cmds = append(cmds, BuildImg, "bash")
 
 	return job.execute("provision_build_container", "docker", cmds...)
 }
@@ -200,8 +199,7 @@ func (job *Job) StartServices() bool {
 	job.execute("services", "docker", "network", "create", job.JobId + "-network")
 
 	for name, service := range job.Build.Services {
-		job.execute("services", "docker", "stop", name)
-		job.execute("services", "docker", "rm", name)
+		job.execute("services", "docker", "rm", "-f", name)
 
 		cmds := []string{"run", "-d", "--net=" + job.JobId + "-network", "--name=" + name, "--net-alias=" + name}
 		for _, env := range service.Env {
@@ -238,8 +236,7 @@ func (job *Job) Clone() bool {
 }
 
 func (job *Job) Provision() bool {
-	job.execute("provision", "docker", "stop", job.JobId)
-	job.execute("provision", "docker", "rm", job.JobId)
+	job.execute("provision", "docker", "rm", "-f", job.JobId)
 
 	isImage := true
 	if job.Build.BaseImage != "" {
