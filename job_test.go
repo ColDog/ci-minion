@@ -16,13 +16,12 @@ func testJob() *Job {
 	build := Build{
 		Env: []string{"TEST=true"},
 		BaseImage: "ubuntu",
-		Services: []Service{
-			Service{
-				Name: "mysql",
-				Image: "mysql:5.7",
-				Env: []string{"MYSQL_ROOT_PASSWORD=pass"},
-				OnStartup: []string{"echo 'hello from mysql'"},
-			},
+		Services: map[string] Service {
+			"mysql": Service{
+					Image: "mysql:5.7",
+					Env: []string{"MYSQL_ROOT_PASSWORD=pass"},
+					OnStartup: []string{"echo 'hello from mysql'"},
+				},
 		},
 		Before: []string{"echo 'pre test'", "apt-get update && apt-get install -y curl && apt-get clean"},
 		Main: []string{"echo 'test'", "sleep 60"},

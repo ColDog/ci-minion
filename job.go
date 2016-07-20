@@ -21,13 +21,13 @@ type Repo struct {
 	AuthPass	string		`json:"auth_pass"`
 	Provider 	string		`json:"provider"`
 	Branch 		string		`json:"branch"`
-	Organization	string		`json:"org"`
+	Organization	string		`json:"owner"`
 	Project 	string		`json:"project"`
 }
 
 func (repo Repo) Url() string {
 	auth := ""
-	if repo.AuthUser != "" {
+	if repo.AuthUser != "" && repo.AuthPass != "" {
 		auth += repo.AuthUser + ":" + repo.AuthPass + "@"
 	}
 
@@ -35,21 +35,21 @@ func (repo Repo) Url() string {
 }
 
 type Service struct {
-	Name 		string 		`json:"name"`
 	Image 		string		`json:"image"`
 	Env 		[]string	`json:"env"`
 	OnStartup 	[]string	`json:"on_startup"`
 }
 
 type Build struct  {
-	Env 		[]string	`json:"env"`
-	BaseImage	string		`json:"base_image"`
-	Services 	[]Service       `json:"services"`
-	Before		[]string	`json:"before"`
-	Main 		[]string	`json:"main"`
-	After 		[]string	`json:"after"`
-	OnSuccess	[]string	`json:"on_success"`
-	OnFailure 	[]string	`json:"on_failure"`
+	Env 		[]string		`json:"env"`
+	BaseImage	string			`json:"base_image"`
+	BaseBuild	string			`json:"base_build"`
+	Services 	map[string] Service     `json:"services"`
+	Before		[]string		`json:"before"`
+	Main 		[]string		`json:"main"`
+	After 		[]string		`json:"after"`
+	OnSuccess	[]string		`json:"on_success"`
+	OnFailure 	[]string		`json:"on_failure"`
 }
 
 type Job struct {
@@ -122,6 +122,8 @@ func (job *Job) run(stages []Stage) bool {
 		ok := stage()
 		if !ok {
 			job.Failed = true
+			last := job.Commands[len(job.Commands) - 1]
+			job.FailureOutput = strings.Join(last.Output, "\n")
 			return false
 		}
 	}
@@ -129,14 +131,27 @@ func (job *Job) run(stages []Stage) bool {
 	return true
 }
 
+func (job *Job) ensure(stages []Stage) bool {
+	ok := true
+	for i, stage := range stages {
+		log.Printf("step: %v %s", i, FuncName(stage))
+		stageOk := stage()
+		if !stageOk {
+			ok = false
+		}
+	}
+
+	return ok
+}
+
 func (job *Job) StartServices() bool {
 	job.execute("services", "docker", "network", "create", job.JobId + "-network")
 
-	for _, service := range job.Build.Services {
-		job.execute("services", "docker", "stop", service.Name)
-		job.execute("services", "docker", "rm", service.Name)
+	for name, service := range job.Build.Services {
+		job.execute("services", "docker", "stop", name)
+		job.execute("services", "docker", "rm", name)
 
-		cmds := []string{"run", "-d", "--net=" + job.JobId + "-network", "--name=" + service.Name, "--net-alias=" + service.Name}
+		cmds := []string{"run", "-d", "--net=" + job.JobId + "-network", "--name=" + name, "--net-alias=" + name}
 		for _, env := range service.Env {
 			cmds = append(cmds, "-e", env)
 		}
@@ -148,7 +163,7 @@ func (job *Job) StartServices() bool {
 		}
 
 		for _, cmd := range service.OnStartup {
-			ok := job.execute("services", "docker", "exec", service.Name, "/bin/sh", "-c", cmd)
+			ok := job.execute("services", "docker", "exec", name, "/bin/sh", "-c", cmd)
 			if !ok {
 				return false
 			}
@@ -159,9 +174,9 @@ func (job *Job) StartServices() bool {
 }
 
 func (job *Job) KillServices() bool {
-	for _, service := range job.Build.Services {
-		job.execute("services", "docker", "stop", service.Name)
-		job.execute("services", "docker", "rm", service.Name)
+	for name, _ := range job.Build.Services {
+		job.execute("services", "docker", "stop", name)
+		job.execute("services", "docker", "rm", name)
 	}
 
 	return true
@@ -170,15 +185,50 @@ func (job *Job) KillServices() bool {
 func (job *Job) Provision() bool {
 	job.execute("provision", "docker", "stop", job.JobId)
 	job.execute("provision", "docker", "rm", job.JobId)
-	job.execute("provision", "docker", "pull", job.Build.BaseImage)
 
-	run := []string{"run", "-it", "-d", "-v", job.BuildFolder + ":/opt/ci", "--name=" + job.JobId, "--net=" + job.JobId + "-network", "--net-alias=main"}
+	isImage := true
+	if job.Build.BaseImage != "" {
+		job.execute("provision", "docker", "pull", job.Build.BaseImage)
+	} else if job.Build.BaseBuild != "" {
+		isImage = false
+
+		b := job.Build.BaseBuild
+		if job.Build.BaseBuild == "." {
+			b = job.BuildFolder
+		}
+
+		job.execute("provision", "docker", "build", "-t", job.JobId, b)
+	} else {
+		log.Println("could not build or pull an image")
+		return false
+	}
+
+	run := []string{"run", "-it", "-d", "--name=" + job.JobId, "--net=" + job.JobId + "-network", "--net-alias=main"}
+
+	if isImage {
+		run = append(run, "-w", "/opt/ci/" + job.Repo.Project)
+	}
+
 	for _, e := range job.Build.Env {
 		run = append(run, "-e", e)
 	}
-	run = append(run, job.Build.BaseImage)
 
-	return job.execute("provision", "docker", run...)
+	if isImage {
+		run = append(run, job.Build.BaseImage)
+	} else {
+		run = append(run, job.JobId)
+	}
+
+	ok := job.execute("provision", "docker", run...)
+	if !ok {
+		return false
+	}
+
+	if isImage {
+		job.execute("provision", "docker", "cp", job.BuildFolder, job.JobId + ":/opt/ci/")
+	}
+
+	return true
 }
 
 func (job *Job) Clone() bool {
@@ -211,7 +261,7 @@ func (job *Job) RunMain() bool {
 
 func (job *Job) RunPost() bool {
 	for _, cmd := range job.Build.After {
-		job.execInsideSh("after", cmd)
+		job.execute("after", "/bin/sh", "-c", cmd)
 	}
 	return true
 }
@@ -219,14 +269,11 @@ func (job *Job) RunPost() bool {
 func (job *Job) RunHooks() bool {
 	if !job.Failed {
 		for _, cmd := range job.Build.OnSuccess {
-			ok := job.execInsideSh("on_success", cmd)
-			if !ok {
-				return false
-			}
+			job.execute("on_success", "/bin/sh", "-c", cmd)
 		}
 	} else {
 		for _, cmd := range job.Build.OnFailure {
-			job.execInsideSh("on_failure", cmd)
+			job.execute("on_failure", "/bin/sh", "-c", cmd)
 		}
 	}
 
@@ -237,6 +284,7 @@ func (job *Job) Cleanup() bool {
 	job.execute("cleanup", "docker", "stop", job.JobId)
 	job.execute("cleanup", "docker", "rm", job.JobId)
 	job.execute("cleanup", "rm", "-rf", job.BuildFolder)
+	job.execute("cleanup", "docker", "network", "rm", job.JobId + "-network")
 	return true
 }
 
@@ -256,6 +304,9 @@ func (job *Job) Run() {
 		job.Provision,
 		job.RunPre,
 		job.RunMain,
+	})
+
+	job.ensure([]Stage{
 		job.RunPost,
 		job.RunHooks,
 		job.Cleanup,
@@ -266,6 +317,7 @@ func (job *Job) Run() {
 		job.Failed = true
 	}
 
+	log.Printf("job finished with failure status: %v %s", job.Failed, job.FailureOutput)
 	job.finished <- true
 }
 

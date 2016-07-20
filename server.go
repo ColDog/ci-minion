@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"github.com/go-amz/amz/s3"
 	"gopkg.in/amz.v1/aws"
+	"strings"
 )
 
 type Minion struct {
@@ -37,10 +38,15 @@ func (server *Minion) viewCurrentState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *Minion) serve()  {
+	spl := strings.Split(server.hostapi, ":")
+	port := spl[len(spl) - 1]
+
+	log.Printf("serving on %s", port)
+
 	http.HandleFunc("/cancel", server.handleCancel)
 	http.HandleFunc("/current", server.viewJob)
 	http.HandleFunc("/current-state", server.viewCurrentState)
-	http.ListenAndServe(server.hostapi, nil)
+	log.Fatal(http.ListenAndServe(":" + port, nil))
 }
 
 func (server *Minion) next() (*Job, bool) {
@@ -53,21 +59,22 @@ func (server *Minion) next() (*Job, bool) {
 		Param("worker", server.hostapi).
 		Param("token", server.token)
 
-	_, body, errs := req.End()
-	if len(errs) > 0 {
+	r, body, _ := req.End()
+
+	if r.StatusCode != 200 {
 		return &Job{}, false
 	}
 
 	err := json.Unmarshal([]byte(body), conf)
 	if err != nil {
-		return &Job{}, false
+		panic(err)
 	}
 
 	if conf.Job.Key != "" {
 		job := NewJob(conf.Job.Key, conf.Job.Repo, conf.Job.Build)
 		return job, true
 	} else {
-		return &Job{}, false
+		panic(conf.Job)
 	}
 }
 
