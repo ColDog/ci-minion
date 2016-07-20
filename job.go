@@ -131,7 +131,7 @@ func (job *Job) execute(topic string, main string, args ...string) bool {
 }
 
 func (job *Job) execIn(topic string, image string, sh string) bool {
-	return job.execute(topic, "docker", "exec", "-it", image,  "/bin/sh", "-c", sh)
+	return job.execute(topic, "docker", "exec", "-i", image,  "/bin/sh", "-c", sh)
 }
 
 func (job *Job) run(stages []Stage) bool {
@@ -185,7 +185,7 @@ func (job *Job) addEnvVars(cmds []string) []string {
 func (job *Job) StartBuildContainer() bool {
 	job.execute("provision_build_container", "docker", "rm", "-f", BuildName)
 
-	cmds := []string{"run", "-i", "--name=" + BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
+	cmds := []string{"run", "-i", "-d", "--name=" + BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
 	for _, env := range job.Build.Env {
 		cmds = append(cmds, "-e", env)
 	}
@@ -205,9 +205,9 @@ func (job *Job) StartServices() bool {
 		for _, env := range service.Env {
 			cmds = append(cmds, "-e", env)
 		}
+		cmds = job.addEnvVars(cmds)
 
 		cmds = append(cmds, service.Image)
-		cmds = job.addEnvVars(cmds)
 		ok := job.execute("services", "docker", cmds...)
 		if !ok {
 			return false

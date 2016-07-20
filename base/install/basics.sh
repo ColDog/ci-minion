@@ -1,6 +1,7 @@
-#!/bin/bash -e
+#!/bin/bash
 
 echo "installing basics"
+apt-get update
 apt-get install -y \
   sudo  \
   build-essential \
