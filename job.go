@@ -8,6 +8,23 @@ import (
 	"strings"
 )
 
+// Overall job flow
+//
+// 1. services
+//	- starts up services inside the docker network
+// 2. provision
+// 	- provisions the build container by building / pulling the image
+// 	- copies over files
+// 	- starts the build image
+// 3. testing
+//	- runs before -> main -> after inside the build image
+// 4. post
+//	- runs the post
+//
+
+var BuildImg string = "dry-dock/u14"
+var BuildName string = "build_container"
+
 type BuildConfig struct {
 	Key 		string 		`json:"key"`
 	Build 		Build		`json:"build"`
@@ -45,11 +62,15 @@ type Build struct  {
 	BaseImage	string			`json:"base_image"`
 	BaseBuild	string			`json:"base_build"`
 	Services 	map[string] Service     `json:"services"`
+	Setup 		[]string		`json:"setup"`
 	Before		[]string		`json:"before"`
 	Main 		[]string		`json:"main"`
 	After 		[]string		`json:"after"`
 	OnSuccess	[]string		`json:"on_success"`
 	OnFailure 	[]string		`json:"on_failure"`
+	Post 		[]string		`json:"post"`
+	PostSuccess	[]string		`json:"post_success"`
+	PostFailure	[]string		`json:"post_failure"`
 }
 
 type Job struct {
@@ -102,14 +123,8 @@ func (job *Job) execute(topic string, main string, args ...string) bool {
 	return res.Error == nil
 }
 
-func (job *Job) execInside(topic string, main string, args ...string) bool {
-	cmds := []string{"exec", job.JobId, main}
-	cmds = append(cmds, args...)
-	return job.execute(topic, "docker", cmds...)
-}
-
-func (job *Job) execInsideSh(topic string, sh string) bool {
-	return job.execInside(topic, "/bin/sh", "-c", sh)
+func (job *Job) execIn(topic string, image string, sh string) bool {
+	return job.execute(topic, "docker", "exec", "-it", image,  "/bin/sh", "-c", sh)
 }
 
 func (job *Job) run(stages []Stage) bool {
@@ -144,6 +159,36 @@ func (job *Job) ensure(stages []Stage) bool {
 	return ok
 }
 
+func (job *Job) addEnvVars(cmds []string) []string {
+	cmds = append(cmds, "-e", "CI_BUILD_ID=" + job.JobId)
+	cmds = append(cmds, "-e", "CI_MAIN_CONTAINER=" + job.JobId)
+	cmds = append(cmds, "-e", "CI_BUILD_FAMILY=" + job.JobFamily)
+	cmds = append(cmds, "-e", "CI_FAILED=" + fmt.Sprintf("%v", job.Failed))
+	cmds = append(cmds, "-e", "CI_GIT_REPO=" + job.Repo.Project)
+	cmds = append(cmds, "-e", "CI_GIT_OWNER=" + job.Repo.Organization)
+	cmds = append(cmds, "-e", "CI_GIT_PROVIDER=" + job.Repo.Provider)
+	cmds = append(cmds, "-e", "CI_GIT_BRANCH=" + job.Repo.Branch)
+	return cmds
+}
+
+func (job *Job) StartBuildContainer() bool {
+	job.execute("provision_build_container", "docker", "pull", BuildImg)
+	job.execute("provision_build_container", "docker", "stop", BuildName)
+	job.execute("provision_build_container", "docker", "rm", BuildName)
+
+	cmds := []string{"run", "--priviledged", "--name", BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
+
+	for _, env := range job.Build.Env {
+		cmds = append(cmds, "-e", env)
+	}
+
+	cmds = job.addEnvVars(cmds)
+
+	cmds = append(cmds, BuildImg)
+
+	return job.execute("provision_build_container", "docker", cmds...)
+}
+
 func (job *Job) StartServices() bool {
 	job.execute("services", "docker", "network", "create", job.JobId + "-network")
 
@@ -157,6 +202,7 @@ func (job *Job) StartServices() bool {
 		}
 
 		cmds = append(cmds, service.Image)
+		cmds = job.addEnvVars(cmds)
 		ok := job.execute("services", "docker", cmds...)
 		if !ok {
 			return false
@@ -213,6 +259,8 @@ func (job *Job) Provision() bool {
 		run = append(run, "-e", e)
 	}
 
+	run = job.addEnvVars(run)
+
 	if isImage {
 		run = append(run, job.Build.BaseImage)
 	} else {
@@ -242,16 +290,27 @@ func (job *Job) Clone() bool {
 	}
 }
 
+func (job *Job) RunSetup() bool {
+	for _, cmd := range job.Build.Setup {
+		ok := job.execIn("setup", BuildName, cmd)
+		if !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (job *Job) RunPre() bool {
 	for _, cmd := range job.Build.Before {
-		job.execInsideSh("before", cmd)
+		job.execIn("before", job.JobId, cmd)
 	}
 	return true
 }
 
 func (job *Job) RunMain() bool {
 	for _, cmd := range job.Build.Main {
-		ok := job.execInsideSh("main", cmd)
+		ok := job.execIn("main", job.JobId, cmd)
 		if !ok {
 			return false
 		}
@@ -259,9 +318,9 @@ func (job *Job) RunMain() bool {
 	return true
 }
 
-func (job *Job) RunPost() bool {
+func (job *Job) RunAfter() bool {
 	for _, cmd := range job.Build.After {
-		job.execute("after", "/bin/sh", "-c", cmd)
+		job.execIn("after", job.JobId, cmd)
 	}
 	return true
 }
@@ -269,11 +328,33 @@ func (job *Job) RunPost() bool {
 func (job *Job) RunHooks() bool {
 	if !job.Failed {
 		for _, cmd := range job.Build.OnSuccess {
-			job.execute("on_success", "/bin/sh", "-c", cmd)
+			job.execIn("on_success", job.JobId, cmd)
 		}
 	} else {
 		for _, cmd := range job.Build.OnFailure {
-			job.execute("on_failure", "/bin/sh", "-c", cmd)
+			job.execIn("on_failure", job.JobId, cmd)
+		}
+	}
+
+	return true
+}
+
+func (job *Job) RunPost() bool {
+	for _, cmd := range job.Build.Post {
+		job.execIn("post", BuildName, cmd)
+	}
+
+	return true
+}
+
+func (job *Job) RunPostHooks() bool {
+	if !job.Failed {
+		for _, cmd := range job.Build.OnSuccess {
+			job.execIn("post_success", BuildName, cmd)
+		}
+	} else {
+		for _, cmd := range job.Build.OnFailure {
+			job.execIn("post_failure", BuildName, cmd)
 		}
 	}
 
@@ -300,6 +381,7 @@ func (job *Job) Sandbox() {
 func (job *Job) Run() {
 	ok := job.run([]Stage{
 		job.Clone,
+		job.RunSetup,
 		job.StartServices,
 		job.Provision,
 		job.RunPre,
@@ -307,8 +389,10 @@ func (job *Job) Run() {
 	})
 
 	job.ensure([]Stage{
-		job.RunPost,
+		job.RunAfter,
 		job.RunHooks,
+		job.RunPostHooks,
+		job.RunPost,
 		job.Cleanup,
 		job.KillServices,
 	})
