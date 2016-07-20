@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"fmt"
+)
 
 func testJob() *Job {
 	repo := Repo{
@@ -13,9 +16,16 @@ func testJob() *Job {
 	build := Build{
 		Env: []string{"TEST=true"},
 		BaseImage: "ubuntu",
-		Services: []string{"mysql:5.7"},
-		Before: []string{"echo 'pre test'"},
-		Main: []string{"echo 'test'"},
+		Services: []Service{
+			Service{
+				Name: "mysql",
+				Image: "mysql:5.7",
+				Env: []string{"MYSQL_ROOT_PASSWORD=pass"},
+				OnStartup: []string{"echo 'hello from mysql'"},
+			},
+		},
+		Before: []string{"echo 'pre test'", "apt-get update && apt-get install -y curl && apt-get clean"},
+		Main: []string{"echo 'test'", "sleep 60"},
 		After: []string{"echo 'after'"},
 		OnSuccess: []string{"echo 'success!'"},
 		OnFailure: []string{"echo 'failure :('"},
@@ -28,4 +38,6 @@ func TestSampleJob(t *testing.T) {
 	job := testJob()
 	go job.Run()
 	job.Wait()
+
+	fmt.Printf("\n\n%s\n", job.Serialize())
 }

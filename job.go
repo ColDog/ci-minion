@@ -34,10 +34,17 @@ func (repo Repo) Url() string {
 	return fmt.Sprintf("https://%s%s.com/%s/%s.git", auth, repo.Provider, repo.Organization, repo.Project)
 }
 
+type Service struct {
+	Name 		string 		`json:"name"`
+	Image 		string		`json:"image"`
+	Env 		[]string	`json:"env"`
+	OnStartup 	[]string	`json:"on_startup"`
+}
+
 type Build struct  {
 	Env 		[]string	`json:"env"`
 	BaseImage	string		`json:"base_image"`
-	Services 	[]string        `json:"services"`
+	Services 	[]Service       `json:"services"`
 	Before		[]string	`json:"before"`
 	Main 		[]string	`json:"main"`
 	After 		[]string	`json:"after"`
@@ -54,7 +61,7 @@ type Job struct {
 	Failed 		bool
 	Cancelled 	bool
 	FailureOutput 	string
-	Commands 	map[string] []CommandResult
+	Commands 	[]*CommandResult
 	quit 		chan bool
 	finished 	chan bool
 }
@@ -64,43 +71,45 @@ func NewJob(id string, repo Repo, build Build) *Job {
 		JobId: id,
 		Repo: repo,
 		Build: build,
-		Commands: make(map[string] []CommandResult),
+		Commands: make([]*CommandResult, 0),
 		quit: make(chan bool, 1),
 		finished: make(chan bool),
 	}
 }
 
-func (job *Job) add(topic string, res CommandResult) {
-	if _, ok := job.Commands[topic]; !ok {
-		job.Commands[topic] = make([]CommandResult, 1)
-	}
-	job.Commands[topic] = append(job.Commands[topic], res)
+func (job *Job) add(topic string, res *CommandResult) {
+	job.Commands = append(job.Commands, res)
 }
 
 func (job *Job) execute(topic string, main string, args ...string) bool {
-	res := execute(job.quit, main, args...)
+	output := make(chan string, 10)
+
+	res := &CommandResult{
+		Topic: topic,
+		Args: strings.Join(args, " "),
+		Error: nil,
+		Output: make([]string, 0),
+	}
 	job.add(topic, res)
+
+	go func() {
+		for out := range output {
+			res.Output = append(res.Output, out)
+		}
+	}()
+
+	res.Error = execute(job.quit, output, main, args...)
 	return res.Error == nil
 }
 
 func (job *Job) execInside(topic string, main string, args ...string) bool {
 	cmds := []string{"exec", job.JobId, main}
 	cmds = append(cmds, args...)
-	res := execute(job.quit, "docker", cmds...)
-	job.add(topic, res)
-	return res.Error == nil
+	return job.execute(topic, "docker", cmds...)
 }
 
 func (job *Job) execInsideSh(topic string, sh string) bool {
-	res := execute(job.quit, "docker", "exec", job.JobId, "/bin/sh", "-c", sh)
-	job.add(topic, res)
-	return res.Error == nil
-}
-
-func (job *Job) execInsideShOut(topic string, sh string) (string, bool) {
-	res := execute(job.quit, "docker", "exec", job.JobId, "/bin/sh", "-c", sh)
-	job.add(topic, res)
-	return res.Output, res.Error == nil
+	return job.execInside(topic, "/bin/sh", "-c", sh)
 }
 
 func (job *Job) run(stages []Stage) bool {
@@ -112,6 +121,7 @@ func (job *Job) run(stages []Stage) bool {
 		log.Printf("step: %v %s", i, FuncName(stage))
 		ok := stage()
 		if !ok {
+			job.Failed = true
 			return false
 		}
 	}
@@ -123,11 +133,35 @@ func (job *Job) StartServices() bool {
 	job.execute("services", "docker", "network", "create", job.JobId + "-network")
 
 	for _, service := range job.Build.Services {
-		spl := strings.Split(service, ":")
-		ok := job.execute("services", "docker", "run", "-it", "--net=" + job.JobId + "-network", "--name=" + spl[0], "--net-alias=" + spl[0], service)
+		job.execute("services", "docker", "stop", service.Name)
+		job.execute("services", "docker", "rm", service.Name)
+
+		cmds := []string{"run", "-d", "--net=" + job.JobId + "-network", "--name=" + service.Name, "--net-alias=" + service.Name}
+		for _, env := range service.Env {
+			cmds = append(cmds, "-e", env)
+		}
+
+		cmds = append(cmds, service.Image)
+		ok := job.execute("services", "docker", cmds...)
 		if !ok {
 			return false
 		}
+
+		for _, cmd := range service.OnStartup {
+			ok := job.execute("services", "docker", "exec", service.Name, "/bin/sh", "-c", cmd)
+			if !ok {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func (job *Job) KillServices() bool {
+	for _, service := range job.Build.Services {
+		job.execute("services", "docker", "stop", service.Name)
+		job.execute("services", "docker", "rm", service.Name)
 	}
 
 	return true
@@ -167,11 +201,9 @@ func (job *Job) RunPre() bool {
 
 func (job *Job) RunMain() bool {
 	for _, cmd := range job.Build.Main {
-		out, ok := job.execInsideShOut("main", cmd)
+		ok := job.execInsideSh("main", cmd)
 		if !ok {
-			job.Failed = true
-			job.FailureOutput = out
-			return true
+			return false
 		}
 	}
 	return true
@@ -187,7 +219,10 @@ func (job *Job) RunPost() bool {
 func (job *Job) RunHooks() bool {
 	if !job.Failed {
 		for _, cmd := range job.Build.OnSuccess {
-			job.execInsideSh("on_success", cmd)
+			ok := job.execInsideSh("on_success", cmd)
+			if !ok {
+				return false
+			}
 		}
 	} else {
 		for _, cmd := range job.Build.OnFailure {
@@ -224,6 +259,7 @@ func (job *Job) Run() {
 		job.RunPost,
 		job.RunHooks,
 		job.Cleanup,
+		job.KillServices,
 	})
 
 	if !job.Failed && !ok {
@@ -244,7 +280,7 @@ func (job *Job) Quit() {
 }
 
 func (job *Job) Serialize() []byte {
-	res, err := json.Marshal(job)
+	res, err := json.MarshalIndent(job, " ", "  ")
 	if err != nil {
 		panic(err)
 	}

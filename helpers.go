@@ -2,22 +2,27 @@ package main
 
 import (
 	"os/exec"
-	"log"
 	"strings"
 	"runtime"
 	"reflect"
 	"os"
+	"log"
+	"bufio"
+	"fmt"
 )
 
 type CommandResult struct {
-	Args 		[]string
-	Output		string
+	Topic 		string
+	Args 		string
+	Output		[]string
 	Error 		error
 }
 
-func execute(quit chan bool, main string, args ...string) CommandResult {
+func execute(quit chan bool, output chan string, main string, args ...string) error {
 	done := make(chan bool, 1)
 	cmd := exec.Command(main, args...)
+
+	log.Printf("exec: %s %s", main, strings.Join(args, " "))
 
 	go func() {
 		select {
@@ -29,20 +34,35 @@ func execute(quit chan bool, main string, args ...string) CommandResult {
 		}
 	}()
 
-	output, err := cmd.CombinedOutput()
-	done <- true
-
-	log.Printf("executing: `%s %s` err: %v", main, strings.Join(args, " "), err)
-
-	//if Config.LogOutput {
-		log.Printf("output: %s", output)
-	//}
-
-	return CommandResult{
-		Args: args,
-		Error: err,
-		Output: string(output),
+	// capture the output and error pipes
+	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
+	err = cmd.Start()
+	if err != nil {
+		return err
 	}
+
+	go func() {
+		buff := bufio.NewScanner(stderr)
+
+		for buff.Scan() {
+			fmt.Printf("	> %s\n", buff.Text())
+			output <- buff.Text()
+		}
+	}()
+
+	go func() {
+		buff := bufio.NewScanner(stdout)
+
+		for buff.Scan() {
+			fmt.Printf("	> %s\n", buff.Text())
+			output <- buff.Text()
+		}
+	}()
+
+	err = cmd.Wait()
+	done <- true
+	return err
 }
 
 func FuncName(i interface{}) string {
