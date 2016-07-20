@@ -9,21 +9,28 @@ import (
 )
 
 // Overall job flow
-//
-// 1. services
+// 1. clone
+//	- clone's the git repo locally, catches any bugs early
+// 2. provision build container
+// 	- starts up the build container, this is destroyed after every build so secret keys can be copied with confidence
+//	- runs setup on the build container
+// 3. services
 //	- starts up services inside the docker network
-// 2. provision
+//	- runs any setup on those services
+// 4. provision
 // 	- provisions the build container by building / pulling the image
 // 	- copies over files
 // 	- starts the build image
-// 3. testing
-//	- runs before -> main -> after inside the build image
-// 4. post
-//	- runs the post
+// 5. testing
+//	- runs before -> main -> after -> (on success | on failure) inside the main image
+// 6. post
+//	- runs the post -> after -> (post success | post failure) inside our build image
+// 7. cleanup
+// 	- removes the network, services, build and test image
 //
 
-var BuildImg string = "dry-dock/u14"
-var BuildName string = "build_container"
+var BuildImg string = "ubuntu"
+var BuildName string = "build"
 
 type BuildConfig struct {
 	Key 		string 		`json:"key"`
@@ -133,7 +140,7 @@ func (job *Job) run(stages []Stage) bool {
 			return false
 		}
 
-		log.Printf("step: %v %s", i, FuncName(stage))
+		log.Printf("\033[0;31mstep: %v %s\033[0m", i, FuncName(stage))
 		ok := stage()
 		if !ok {
 			job.Failed = true
@@ -149,7 +156,8 @@ func (job *Job) run(stages []Stage) bool {
 func (job *Job) ensure(stages []Stage) bool {
 	ok := true
 	for i, stage := range stages {
-		log.Printf("step: %v %s", i, FuncName(stage))
+
+		log.Printf("\033[0;31mstep: %v %s\033[0m", i, FuncName(stage))
 		stageOk := stage()
 		if !stageOk {
 			ok = false
@@ -160,30 +168,29 @@ func (job *Job) ensure(stages []Stage) bool {
 }
 
 func (job *Job) addEnvVars(cmds []string) []string {
-	cmds = append(cmds, "-e", "CI_BUILD_ID=" + job.JobId)
-	cmds = append(cmds, "-e", "CI_MAIN_CONTAINER=" + job.JobId)
-	cmds = append(cmds, "-e", "CI_BUILD_FAMILY=" + job.JobFamily)
-	cmds = append(cmds, "-e", "CI_FAILED=" + fmt.Sprintf("%v", job.Failed))
-	cmds = append(cmds, "-e", "CI_GIT_REPO=" + job.Repo.Project)
-	cmds = append(cmds, "-e", "CI_GIT_OWNER=" + job.Repo.Organization)
-	cmds = append(cmds, "-e", "CI_GIT_PROVIDER=" + job.Repo.Provider)
-	cmds = append(cmds, "-e", "CI_GIT_BRANCH=" + job.Repo.Branch)
-	return cmds
+	add := []string{
+		"-e", "CI_BUILD_ID=" + job.JobId,
+		"-e", "CI_MAIN_CONTAINER=" + job.JobId,
+		"-e", "CI_BUILD_FAMILY=" + job.JobFamily,
+		"-e", "CI_FAILED=" + fmt.Sprintf("%v", job.Failed),
+		"-e", "CI_GIT_REPO=" + job.Repo.Project,
+		"-e", "CI_GIT_OWNER=" + job.Repo.Organization,
+		"-e", "CI_GIT_PROVIDER=" + job.Repo.Provider,
+		"-e", "CI_GIT_BRANCH=" + job.Repo.Branch,
+	}
+
+	return append(cmds, add...)
 }
 
 func (job *Job) StartBuildContainer() bool {
-	job.execute("provision_build_container", "docker", "pull", BuildImg)
 	job.execute("provision_build_container", "docker", "stop", BuildName)
 	job.execute("provision_build_container", "docker", "rm", BuildName)
 
-	cmds := []string{"run", "--priviledged", "--name", BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
-
+	cmds := []string{"run", "--name=" + BuildName, "-v", "/var/run/docker.sock:/var/run/docker.sock"}
 	for _, env := range job.Build.Env {
 		cmds = append(cmds, "-e", env)
 	}
-
 	cmds = job.addEnvVars(cmds)
-
 	cmds = append(cmds, BuildImg)
 
 	return job.execute("provision_build_container", "docker", cmds...)
@@ -219,13 +226,15 @@ func (job *Job) StartServices() bool {
 	return true
 }
 
-func (job *Job) KillServices() bool {
-	for name, _ := range job.Build.Services {
-		job.execute("services", "docker", "stop", name)
-		job.execute("services", "docker", "rm", name)
+func (job *Job) Clone() bool {
+	cwd, _ := os.Getwd()
+	job.BuildFolder = cwd + "/builds/" + job.Repo.Project
+	job.execute("clone", "rm", "-rf", job.BuildFolder)
+	if job.Repo.Project != "" {
+		return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
+	} else {
+		return true
 	}
-
-	return true
 }
 
 func (job *Job) Provision() bool {
@@ -277,17 +286,6 @@ func (job *Job) Provision() bool {
 	}
 
 	return true
-}
-
-func (job *Job) Clone() bool {
-	cwd, _ := os.Getwd()
-	job.BuildFolder = cwd + "/builds/" + job.Repo.Project
-	job.execute("clone", "rm", "-rf", job.BuildFolder)
-	if job.Repo.Project != "" {
-		return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
-	} else {
-		return true
-	}
 }
 
 func (job *Job) RunSetup() bool {
@@ -361,6 +359,15 @@ func (job *Job) RunPostHooks() bool {
 	return true
 }
 
+func (job *Job) KillServices() bool {
+	for name, _ := range job.Build.Services {
+		job.execute("services", "docker", "stop", name)
+		job.execute("services", "docker", "rm", name)
+	}
+
+	return true
+}
+
 func (job *Job) Cleanup() bool {
 	job.execute("cleanup", "docker", "stop", job.JobId)
 	job.execute("cleanup", "docker", "rm", job.JobId)
@@ -381,6 +388,7 @@ func (job *Job) Sandbox() {
 func (job *Job) Run() {
 	ok := job.run([]Stage{
 		job.Clone,
+		job.StartBuildContainer,
 		job.RunSetup,
 		job.StartServices,
 		job.Provision,

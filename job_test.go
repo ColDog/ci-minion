@@ -2,7 +2,6 @@ package main
 
 import (
 	"testing"
-	"fmt"
 )
 
 func testJob() *Job {
@@ -16,6 +15,7 @@ func testJob() *Job {
 	build := Build{
 		Env: []string{"TEST=true"},
 		BaseImage: "ubuntu",
+		Setup: []string{"echo 'hello from setup'"},
 		Services: map[string] Service {
 			"mysql": Service{
 					Image: "mysql:5.7",
@@ -28,6 +28,9 @@ func testJob() *Job {
 		After: []string{"echo 'after'"},
 		OnSuccess: []string{"echo 'success!'"},
 		OnFailure: []string{"echo 'failure :('"},
+		Post: []string{"echo 'on build machine'"},
+		PostSuccess: []string{"echo 'success!'"},
+		PostFailure: []string{"echo 'failure :('"},
 	}
 
 	return NewJob("test", repo, build)
@@ -38,5 +41,5 @@ func TestSampleJob(t *testing.T) {
 	go job.Run()
 	job.Wait()
 
-	fmt.Printf("\n\n%s\n", job.Serialize())
+	//fmt.Printf("\n\n%s\n", job.Serialize())
 }
