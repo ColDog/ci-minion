@@ -1,5 +1,9 @@
 #!/bin/bash -e
 
+echo "install node"
+curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
 echo "install nvm"
 curl https://raw.githubusercontent.com/creationix/nvm/v0.29.0/install.sh | bash
 
@@ -8,8 +12,3 @@ export NVM_DIR="/root/.nvm"
 
 # add source of nvm to .bashrc - allows user to use nvm as a command
 echo "source ~/.nvm/nvm.sh" >> $HOME/.bashrc
-
-echo "install node"
-add-apt-repository -y ppa:chris-lea/node.js
-apt-get update
-apt-get install -y nodejs

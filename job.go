@@ -29,8 +29,8 @@ import (
 // 	- removes the network, services, build and test image
 //
 
-var BuildImg string = "ubuntu"
-var BuildName string = "build"
+var BuildImg string = "coldog/simpleci-base"
+var BuildName string = "simpleci-base"
 
 type BuildConfig struct {
 	Key 		string 		`json:"key"`
