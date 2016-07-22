@@ -59,7 +59,11 @@ func (server *Minion) next() (*Job, bool) {
 		Param("worker", server.hostapi).
 		Param("token", server.token)
 
-	r, body, _ := req.End()
+	r, body, errs := req.End()
+
+	if errs != nil && len(errs) > 0 {
+		panic(errs[0])
+	}
 
 	if r.StatusCode != 200 {
 		return &Job{}, false

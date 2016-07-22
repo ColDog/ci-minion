@@ -13,3 +13,4 @@ rvm install ruby
 rvm use ruby --default
 rvm rubygems current
 gem install bundler
+gem install simpleci-cli
