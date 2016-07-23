@@ -23,8 +23,8 @@ func testJob() *Job {
 					OnStartup: []string{"echo 'hello from mysql'"},
 				},
 		},
-		Before: []string{"echo 'pre test'", "apt-get update && apt-get install -y curl && apt-get clean"},
-		Main: []string{"echo 'test'", "sleep 60"},
+		Before: []string{"echo 'pre test'"},
+		Main: []string{"echo 'test'", "sleep 5"},
 		After: []string{"echo 'after'"},
 		OnSuccess: []string{"echo 'success!'"},
 		OnFailure: []string{"echo 'failure :('"},
@@ -33,7 +33,7 @@ func testJob() *Job {
 		PostFailure: []string{"echo 'failure :('"},
 	}
 
-	return NewJob("test", repo, build)
+	return NewJob("test", repo, build, 1)
 }
 
 func TestSampleJob(t *testing.T) {

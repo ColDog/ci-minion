@@ -27,4 +27,5 @@ RUN ./ruby.sh
 RUN mkdir -p /opt/ci
 WORKDIR /opt/ci
 
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 ENTRYPOINT ["bash"]

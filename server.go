@@ -57,7 +57,7 @@ func (server *Minion) next() (*Job, bool) {
 	req := gorequest.New().
 		Post(server.api + "/minions/jobs").
 		Param("worker", server.hostapi).
-		Param("token", server.token)
+		Set("Authorization", fmt.Sprintf("minion:%s", server.token))
 
 	r, body, errs := req.End()
 
@@ -75,7 +75,7 @@ func (server *Minion) next() (*Job, bool) {
 	}
 
 	if conf.Job.Key != "" {
-		job := NewJob(conf.Job.Key, conf.Job.Repo, conf.Job.Build)
+		job := NewJob(conf.Job.Key, conf.Job.Repo, conf.Job.Build, conf.Job.UserId)
 		return job, true
 	} else {
 		panic(conf.Job)
@@ -85,10 +85,11 @@ func (server *Minion) next() (*Job, bool) {
 func (server *Minion) save() {
 	out := server.current.Serialize()
 	path := fmt.Sprintf("builds/%s/%s", server.current.JobFamily, server.current.JobId)
+
 	err := server.s3.Put(path, out, "application/json", s3.ACL("public-read"))
 	if err != nil {
 		log.Printf("Could not upload file %v", err)
-		panic(err)
+		// panic(err)
 	} else {
 		log.Printf("uploaded file to %s", server.current.JobId)
 	}
@@ -99,13 +100,15 @@ func (server *Minion) save() {
 		Param("cancelled", fmt.Sprintf("%v", server.current.Cancelled)).
 		Param("failed", fmt.Sprintf("%v", server.current.Failed)).
 		Param("failure", server.current.FailureOutput).
-		Param("token", server.token).
+		Param("total_time", fmt.Sprintf("%v", server.current.TotalTime)).
 		Param("stored_output_url", fmt.Sprintf("https://s3-%s.amazonaws.com/%s/%s", server.s3.Region.Name, Config.S3Bucket, path)).
+		Set("Authorization", fmt.Sprintf("minion:%s.%v", server.token, server.current.UserId)).
 		End()
 
 	if len(errs) > 0 {
 		log.Printf("Could not patch updates %s %v", server.api, errs[0])
-		//panic(errs[0])
+	} else {
+		log.Println("saved!")
 	}
 }
 

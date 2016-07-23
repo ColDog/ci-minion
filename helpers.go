@@ -9,16 +9,20 @@ import (
 	"log"
 	"bufio"
 	"fmt"
+	"time"
 )
 
 type CommandResult struct {
 	Topic 		string
 	Args 		string
+	Time 		int64
 	Output		[]string
 	Error 		error
 }
 
-func execute(quit chan bool, output chan string, main string, args ...string) error {
+func execute(quit chan bool, output chan string, main string, args ...string) (error, int64) {
+	t1 := time.Now().Unix()
+
 	done := make(chan bool, 1)
 	cmd := exec.Command(main, args...)
 
@@ -39,7 +43,8 @@ func execute(quit chan bool, output chan string, main string, args ...string) er
 	stderr, err := cmd.StderrPipe()
 	err = cmd.Start()
 	if err != nil {
-		return err
+		t2 := time.Now().Unix()
+		return err, t2 - t1
 	}
 
 	go func() {
@@ -62,7 +67,8 @@ func execute(quit chan bool, output chan string, main string, args ...string) er
 
 	err = cmd.Wait()
 	done <- true
-	return err
+	t2 := time.Now().Unix()
+	return err, t2 - t1
 }
 
 func FuncName(i interface{}) string {

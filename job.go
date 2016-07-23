@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 // Overall job flow
@@ -29,11 +30,12 @@ import (
 // 	- removes the network, services, build and test image
 //
 
-var BuildImg string = "coldog/simpleci-base"
+var BuildImg string = "coldog/simpleci-base:latest"
 var BuildName string = "simpleci-base"
 
 type BuildConfig struct {
 	Key 		string 		`json:"key"`
+	UserId 		int          	`json:"user_id"`
 	Build 		Build		`json:"build"`
 	Repo 		Repo		`json:"repo"`
 }
@@ -81,22 +83,26 @@ type Build struct  {
 }
 
 type Job struct {
+	UserId		int
 	JobId		string
 	JobFamily 	string
 	Repo 		Repo
 	BuildFolder 	string
 	Build		Build
+	TotalTime 	int64
 	Failed 		bool
 	Cancelled 	bool
 	FailureOutput 	string
 	Commands 	[]*CommandResult
+	startTime 	int64
 	quit 		chan bool
 	finished 	chan bool
 }
 
-func NewJob(id string, repo Repo, build Build) *Job {
+func NewJob(id string, repo Repo, build Build, userId int) *Job {
 	return &Job{
 		JobId: id,
+		UserId: userId,
 		Repo: repo,
 		Build: build,
 		Commands: make([]*CommandResult, 0),
@@ -109,12 +115,16 @@ func (job *Job) add(topic string, res *CommandResult) {
 	job.Commands = append(job.Commands, res)
 }
 
+func (job *Job) lastCmd() *CommandResult {
+	return job.Commands[len(job.Commands) - 1]
+}
+
 func (job *Job) execute(topic string, main string, args ...string) bool {
 	output := make(chan string, 10)
 
 	res := &CommandResult{
 		Topic: topic,
-		Args: strings.Join(args, " "),
+		Args: main + " " + strings.Join(args, " "),
 		Error: nil,
 		Output: make([]string, 0),
 	}
@@ -126,12 +136,14 @@ func (job *Job) execute(topic string, main string, args ...string) bool {
 		}
 	}()
 
-	res.Error = execute(job.quit, output, main, args...)
+	err, t := execute(job.quit, output, main, args...)
+	res.Error = err
+	res.Time = t
 	return res.Error == nil
 }
 
 func (job *Job) execIn(topic string, image string, sh string) bool {
-	return job.execute(topic, "docker", "exec", "-i", image,  "/bin/sh", "-c", sh)
+	return job.execute(topic, "docker", "exec", image,  "/bin/bash", "-l", "-c", sh)
 }
 
 func (job *Job) run(stages []Stage) bool {
@@ -177,9 +189,21 @@ func (job *Job) addEnvVars(cmds []string) []string {
 		"-e", "CI_GIT_OWNER=" + job.Repo.Organization,
 		"-e", "CI_GIT_PROVIDER=" + job.Repo.Provider,
 		"-e", "CI_GIT_BRANCH=" + job.Repo.Branch,
+		"-e", "SIMPLECI_KEY=minion",
+		"-e", "SIMPLECI_SECRET=" + fmt.Sprintf("%s.%v", Config.MinionToken, job.UserId),
 	}
 
 	return append(cmds, add...)
+}
+
+func (job *Job) StartTimer() bool {
+	job.startTime = time.Now().Unix()
+	return true
+}
+
+func (job *Job) StopTimer() bool {
+	job.TotalTime = time.Now().Unix() - job.startTime
+	return true
 }
 
 func (job *Job) StartBuildContainer() bool {
@@ -190,9 +214,14 @@ func (job *Job) StartBuildContainer() bool {
 		cmds = append(cmds, "-e", env)
 	}
 	cmds = job.addEnvVars(cmds)
-	cmds = append(cmds, BuildImg, "bash")
+	cmds = append(cmds, BuildImg)
 
-	return job.execute("provision_build_container", "docker", cmds...)
+	ok := job.execute("provision_build_container", "docker", cmds...)
+	if ok {
+		job.execIn("provision_build_container", BuildName, "gem install simpleci-cli --no-ri --no-rdoc")
+	}
+
+	return ok
 }
 
 func (job *Job) StartServices() bool {
@@ -229,7 +258,12 @@ func (job *Job) Clone() bool {
 	job.BuildFolder = cwd + "/builds/" + job.Repo.Project
 	job.execute("clone", "rm", "-rf", job.BuildFolder)
 	if job.Repo.Project != "" {
-		return job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
+		ok := job.execute("clone", "git", "clone", "-b", job.Repo.Branch, job.Repo.Url(), job.BuildFolder)
+		if ok {
+			// git setup
+			job.execute("clone", "git", "-C", job.BuildFolder, "log", "-n", "1")
+		}
+		return ok
 	} else {
 		return true
 	}
@@ -366,8 +400,8 @@ func (job *Job) KillServices() bool {
 }
 
 func (job *Job) Cleanup() bool {
-	job.execute("cleanup", "docker", "stop", job.JobId)
-	job.execute("cleanup", "docker", "rm", job.JobId)
+	job.execute("cleanup", "docker", "rm", "-f", job.JobId)
+	job.execute("cleanup", "docker", "rm", "-f", BuildName)
 	job.execute("cleanup", "rm", "-rf", job.BuildFolder)
 	job.execute("cleanup", "docker", "network", "rm", job.JobId + "-network")
 	return true
@@ -383,7 +417,10 @@ func (job *Job) Sandbox() {
 }
 
 func (job *Job) Run() {
+	fmt.Printf("\n\n--------\nstarting job: %s for %v\n", job.JobId, job.UserId)
+
 	ok := job.run([]Stage{
+		job.StartTimer,
 		job.Clone,
 		job.StartBuildContainer,
 		job.RunSetup,
@@ -398,8 +435,9 @@ func (job *Job) Run() {
 		job.RunHooks,
 		job.RunPostHooks,
 		job.RunPost,
-		job.Cleanup,
 		job.KillServices,
+		job.Cleanup,
+		job.StopTimer,
 	})
 
 	if !job.Failed && !ok {

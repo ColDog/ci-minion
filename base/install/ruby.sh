@@ -14,3 +14,5 @@ rvm use ruby --default
 rvm rubygems current
 gem install bundler
 gem install simpleci-cli
+
+echo "source /usr/local/rvm/scripts/rvm" >> $HOME/.bashrc
