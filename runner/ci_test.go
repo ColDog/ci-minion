@@ -4,6 +4,8 @@ import "testing"
 
 func testJob() *CiJob {
 	conf := JobConfig{
+		JobId: "test_1",
+		JobFamily: "test",
 		Repo: Repo{
 			Provider: "github",
 			Branch: "master",
@@ -35,5 +37,7 @@ func testJob() *CiJob {
 func TestGitSetup(t *testing.T) {
 	ci := testJob()
 
+	ci.Setup()
 	ci.GitSetup()
+	ci.SetupBuildImage()
 }

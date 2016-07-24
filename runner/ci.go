@@ -8,19 +8,25 @@ type CiJob struct {
 	folder 		string
 }
 
-func NewJob(job JobConfig)  {
+func NewJob(job JobConfig) *CiJob {
 	return &CiJob{Job: job}
+}
+
+func (ci *CiJob) Setup() bool {
+	ci.execute("docker", "network", "create", "test-net")
+	return true
 }
 
 func (ci *CiJob) GitSetup() bool {
 	dir, _ := os.Getwd()
-	ci.folder = dir
+	ci.folder = dir + "/builds/" + ci.Job.Repo.Project
 
+	ci.execute("rm", "-rf", ci.folder)
 	if ci.Job.Repo.Project != "" {
-		ok := ci.execute("git", "clone", "-b", ci.Job.Repo.Branch, ci.Job.Repo.url(), dir)
+		ok := ci.execute("git", "clone", "-b", ci.Job.Repo.Branch, ci.Job.Repo.url(), ci.folder)
 		if ok {
 			// git setup
-			ci.execute("git", "-C", dir, "log", "-n", "1")
+			ci.execute("git", "-C", ci.folder, "log", "-n", "1")
 		}
 		return ok
 	} else {
@@ -30,14 +36,14 @@ func (ci *CiJob) GitSetup() bool {
 
 func (ci *CiJob) SetupBuildImage() bool {
 	image := ""
-	if ci.Job.Build.BaseBuild {
+	if ci.Job.Build.BaseBuild != "" {
 		ok := ci.execute("docker", "build", "-t", ci.Job.JobId, ci.Job.Build.BaseBuild)
 		if !ok {
 			return false
 		}
 		image = ci.Job.JobId
-	} else if ci.Job.Build.BaseImage {
-		ok := ci.execute("docekr", "pull", ci.Job.Build.BaseImage)
+	} else if ci.Job.Build.BaseImage != "" {
+		ok := ci.execute("docker", "pull", ci.Job.Build.BaseImage)
 		if !ok {
 			return false
 		}
@@ -48,17 +54,20 @@ func (ci *CiJob) SetupBuildImage() bool {
 		c := Docker{
 			Image: image,
 			Env: ci.Job.env(),
-			WorkDir: "/opt/ci",
-			Net: Config.CiNet,
+			WorkDir: "/opt/ci/" + ci.Job.Repo.Project,
+			Net: "test-net",
 			NetAlias: "main",
 			Name: "main",
+			FlagI: true,
+			FlagD: true,
 		}
 
+		ci.execute("docker", "rm", "-f", c.Name)
 		ok := ci.execute("docker", c.start()...)
 		if !ok {
 			return false
 		}
-		ci.execute("docker", "cp", "main", ci.folder, "/opt/ci")
+		ci.execute("docker", "cp", ci.folder, "main:/opt/ci")
 	}
 
 	return true
@@ -76,9 +85,11 @@ func (ci *CiJob) SetupServices() bool {
 			Image: service.Image,
 			Env: service.Env,
 			WorkDir: "/opt/ci",
-			Net: Config.CiNet,
+			Net: "test-net",
 			NetAlias: name,
 			Name: name,
+			FlagI: true,
+			FlagD: true,
 		}
 
 		ok = ci.execute("docker", c.start()...)

@@ -4,7 +4,6 @@ import "fmt"
 
 var Config struct{
 	MinionToken 	string
-	CiNet 		string
 }
 
 type RunStatus struct {
@@ -62,14 +61,14 @@ type JobConfig struct {
 
 func (job JobConfig) env() []string {
 	return []string{
-		"-e", "CI_BUILD_ID=" + job.JobId,
-		"-e", "CI_MAIN_CONTAINER=" + job.JobId,
-		"-e", "CI_BUILD_FAMILY=" + job.JobFamily,
-		"-e", "CI_GIT_REPO=" + job.Repo.Project,
-		"-e", "CI_GIT_OWNER=" + job.Repo.Organization,
-		"-e", "CI_GIT_PROVIDER=" + job.Repo.Provider,
-		"-e", "CI_GIT_BRANCH=" + job.Repo.Branch,
-		"-e", "SIMPLECI_KEY=minion",
-		"-e", "SIMPLECI_SECRET=" + fmt.Sprintf("%s.%v", Config.MinionToken, job.UserId),
+		"CI_BUILD_ID=" + job.JobId,
+		"CI_MAIN_CONTAINER=main",
+		"CI_BUILD_FAMILY=" + job.JobFamily,
+		"CI_GIT_REPO=" + job.Repo.Project,
+		"CI_GIT_OWNER=" + job.Repo.Organization,
+		"CI_GIT_PROVIDER=" + job.Repo.Provider,
+		"CI_GIT_BRANCH=" + job.Repo.Branch,
+		"SIMPLECI_KEY=minion",
+		"SIMPLECI_SECRET=" + fmt.Sprintf("%s.%v", Config.MinionToken, job.UserId),
 	}
 }

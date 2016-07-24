@@ -10,6 +10,7 @@ type Docker struct {
 	WorkDir 	string
 	FlagI 		bool
 	FlagT		bool
+	FlagD		bool
 }
 
 func (dock Docker) start() []string {
@@ -21,6 +22,10 @@ func (dock Docker) start() []string {
 
 	if dock.FlagT {
 		cmd = append(cmd, "-t")
+	}
+
+	if dock.FlagD {
+		cmd = append(cmd, "-d")
 	}
 
 	if dock.WorkDir != "" {
@@ -39,8 +44,11 @@ func (dock Docker) start() []string {
 		cmd = append(cmd, "--name", dock.Name)
 	}
 
-	cmd = append(cmd, dock.Ports...)
-	cmd = append(cmd, dock.Env)
+	for _, env := range dock.Env {
+		if env != "" {
+			cmd = append(cmd, "-e", env)
+		}
+	}
 
 	return append(cmd, dock.Image)
 }
