@@ -1,6 +1,8 @@
 package runner
 
-import "os"
+import (
+	"os"
+)
 
 type CiJob struct {
 	Runner
@@ -103,4 +105,76 @@ func (ci *CiJob) SetupServices() bool {
 	}
 
 	return true
+}
+
+func (ci *CiJob) Before() bool {
+	for _, cmd := range ci.Job.Build.Before {
+		ok := ci.executeCmd(cmd)
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (ci *CiJob) Main() bool {
+	for _, cmd := range ci.Job.Build.Main {
+		ok := ci.executeCmd(cmd)
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (ci *CiJob) After()  {
+	for _, cmd := range ci.Job.Build.After {
+		ci.executeCmd(cmd)
+	}
+	return true
+}
+
+func (ci *CiJob) AfterHooks() bool {
+	if ci.Status.Failed {
+		for _, cmd := range ci.Job.Build.OnFailure {
+			ci.executeCmd(cmd)
+		}
+	} else {
+		for _, cmd := range ci.Job.Build.OnSuccess {
+			ci.executeCmd(cmd)
+		}
+	}
+	return true
+}
+
+func (ci *CiJob) Cleanup() bool {
+	ci.execute("rm", "-rf", ci.folder)
+	ci.execute("docker", "rm", "-f", "main")
+	for name, _ := range ci.Job.Build.Services {
+		ci.execute("docker", "rm", "-f", name)
+	}
+	return true
+}
+
+func (ci *CiJob) Run() {
+	ci.start()
+
+	ci.run([]Stage{
+		ci.GitSetup,
+		ci.SetupBuildImage,
+		ci.SetupServices,
+		ci.Before,
+		ci.Main,
+	})
+
+	ci.after([]Stage{
+		ci.After,
+		ci.AfterHooks,
+	})
+
+	ci.ensure([]Stage{
+		ci.Cleanup,
+	})
+
+	ci.finish()
 }

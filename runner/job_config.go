@@ -2,10 +2,6 @@ package runner
 
 import "fmt"
 
-var Config struct{
-	MinionToken 	string
-}
-
 type RunStatus struct {
 	Failed 		bool			`json:"failed"`
 	Failure 	string			`json:"failure"`
@@ -57,6 +53,7 @@ type JobConfig struct {
 	UserId		int			`json:"user_id"`
 	Build 		Build			`json:"build"`
 	Repo 		Repo			`json:"repo"`
+	token 		string
 }
 
 func (job JobConfig) env() []string {
@@ -69,6 +66,6 @@ func (job JobConfig) env() []string {
 		"CI_GIT_PROVIDER=" + job.Repo.Provider,
 		"CI_GIT_BRANCH=" + job.Repo.Branch,
 		"SIMPLECI_KEY=minion",
-		"SIMPLECI_SECRET=" + fmt.Sprintf("%s.%v", Config.MinionToken, job.UserId),
+		"SIMPLECI_SECRET=" + fmt.Sprintf("%s.%v", job.token, job.UserId),
 	}
 }

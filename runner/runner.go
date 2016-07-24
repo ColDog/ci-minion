@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"encoding/json"
 )
 
 type Runner struct {
@@ -35,9 +36,12 @@ func (runner *Runner) run(stages []Stage) bool {
 	return true
 }
 
-func (runner *Runner) ensure(stages []Stage) bool {
+func (runner *Runner) after(stages []Stage) bool {
 	ok := true
 	for i, stage := range stages {
+		if runner.Status.Cancelled {
+			return false
+		}
 
 		runner.topic = funcName(stage)
 		log.Printf("\033[0;31mstep: %v %s\033[0m", i, runner.topic)
@@ -48,6 +52,16 @@ func (runner *Runner) ensure(stages []Stage) bool {
 	}
 
 	return ok
+}
+
+func (runner *Runner) ensure(stages []Stage) bool {
+	for i, stage := range stages {
+		runner.topic = funcName(stage)
+		log.Printf("\033[0;31mstep: %v %s\033[0m", i, runner.topic)
+		stage()
+	}
+
+	return true
 }
 
 func (runner *Runner) execute(main string, args ...string) bool {
@@ -73,6 +87,10 @@ func (runner *Runner) execute(main string, args ...string) bool {
 	return res.Error == nil
 }
 
+func (runner *Runner) executeCmd(cmd string) bool {
+	return runner.execute("/bin/sh", "-c", cmd)
+}
+
 func (runner *Runner) wait()  {
 	<- runner.finished
 }
@@ -90,4 +108,12 @@ func (runner *Runner) cancel() {
 	runner.quit <- true
 	runner.Status.Cancelled = true
 	runner.finish()
+}
+
+func (runner *Runner) serialize() []byte {
+	res, err := json.MarshalIndent(runner.Status, " ", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return res
 }

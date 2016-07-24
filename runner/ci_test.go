@@ -34,10 +34,8 @@ func testJob() *CiJob {
 	return NewJob(conf)
 }
 
-func TestGitSetup(t *testing.T) {
+func TestJob(t *testing.T) {
 	ci := testJob()
 
-	ci.Setup()
-	ci.GitSetup()
-	ci.SetupBuildImage()
+	ci.Run()
 }
