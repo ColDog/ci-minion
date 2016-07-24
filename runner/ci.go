@@ -86,7 +86,6 @@ func (ci *CiJob) SetupServices() bool {
 		c := Docker{
 			Image: service.Image,
 			Env: service.Env,
-			WorkDir: "/opt/ci",
 			Net: "test-net",
 			NetAlias: name,
 			Name: name,
