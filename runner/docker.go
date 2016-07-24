@@ -1,4 +1,4 @@
-package runner
+package main
 
 type Docker struct {
 	Image 		string
