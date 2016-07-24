@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+env GOOS=linux GOARCH=arm go build -o base/runner github.com/coldog/minion/runner
+
