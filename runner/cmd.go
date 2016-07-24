@@ -71,6 +71,10 @@ func execute(quit chan bool, output chan string, main string, args ...string) (e
 }
 
 func funcName(i interface{}) string {
-	s := strings.Split(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name(), ".")
-	return strings.Split(s[len(s) - 1], "-")[0]
+	s := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	spl := strings.Split(s, ".")
+	s = strings.Split(spl[len(spl) - 1], "-")[0]
+	s = strings.Replace(s, ")", "", -1)
+	s = strings.Replace(s, "(", "", -1)
+	return s
 }

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"os"
+	"fmt"
 )
 
 type CiJob struct {
@@ -15,6 +16,8 @@ func NewJob(job JobConfig) *CiJob {
 }
 
 func (ci *CiJob) Setup() bool {
+	fmt.Printf("\n\n----------------")
+	fmt.Printf("starting build %s\n", ci.Job.JobId)
 	ci.execute("docker", "network", "create", "test-net")
 	return true
 }
@@ -126,20 +129,28 @@ func (ci *CiJob) Main() bool {
 	return true
 }
 
-func (ci *CiJob) After()  {
+func (ci *CiJob) After() bool {
 	for _, cmd := range ci.Job.Build.After {
 		ci.executeCmd(cmd)
 	}
 	return true
 }
 
-func (ci *CiJob) AfterHooks() bool {
+func (ci *CiJob) OnSuccess() bool {
+	if !ci.Status.Failed {
+		for _, cmd := range ci.Job.Build.OnFailure {
+			ok := ci.executeCmd(cmd)
+			if !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (ci *CiJob) OnFailure() bool {
 	if ci.Status.Failed {
 		for _, cmd := range ci.Job.Build.OnFailure {
-			ci.executeCmd(cmd)
-		}
-	} else {
-		for _, cmd := range ci.Job.Build.OnSuccess {
 			ci.executeCmd(cmd)
 		}
 	}
@@ -148,10 +159,13 @@ func (ci *CiJob) AfterHooks() bool {
 
 func (ci *CiJob) Cleanup() bool {
 	ci.execute("rm", "-rf", ci.folder)
+	ci.execute("docker", "stop", "main")
 	ci.execute("docker", "rm", "-f", "main")
 	for name, _ := range ci.Job.Build.Services {
+		ci.execute("docker", "stop", name)
 		ci.execute("docker", "rm", "-f", name)
 	}
+	ci.execute("docker", "network", "rm", "test-net")
 	return true
 }
 
@@ -168,7 +182,8 @@ func (ci *CiJob) Run() {
 
 	ci.after([]Stage{
 		ci.After,
-		ci.AfterHooks,
+		ci.OnSuccess,
+		ci.OnFailure,
 	})
 
 	ci.ensure([]Stage{
