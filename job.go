@@ -115,10 +115,6 @@ func (job *Job) add(topic string, res *CommandResult) {
 	job.Commands = append(job.Commands, res)
 }
 
-func (job *Job) lastCmd() *CommandResult {
-	return job.Commands[len(job.Commands) - 1]
-}
-
 func (job *Job) execute(topic string, main string, args ...string) bool {
 	output := make(chan string, 10)
 
