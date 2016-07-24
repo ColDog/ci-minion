@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 	"encoding/json"
+	"fmt"
 )
 
 type Runner struct {
@@ -12,18 +13,21 @@ type Runner struct {
 	quit 		chan bool
 	topic 		string
 	startTime 	int64
+	idx 		int
+	id 		string
 	Status 		RunStatus
 }
 type Stage func() bool
 
 func (runner *Runner) run(stages []Stage) bool {
-	for i, stage := range stages {
+	for _, stage := range stages {
+		runner.idx++
 		if runner.Status.Cancelled {
 			return false
 		}
 
 		runner.topic = funcName(stage)
-		log.Printf("\033[0;31mstep: %v %s\033[0m", i, runner.topic)
+		log.Printf("\033[0;31mstep: %v %s\033[0m", runner.idx, runner.topic)
 		ok := stage()
 		if !ok {
 			runner.Status.Failed = true
@@ -38,13 +42,14 @@ func (runner *Runner) run(stages []Stage) bool {
 
 func (runner *Runner) after(stages []Stage) bool {
 	ok := true
-	for i, stage := range stages {
+	for _, stage := range stages {
+		runner.idx++
 		if runner.Status.Cancelled {
 			return false
 		}
 
 		runner.topic = funcName(stage)
-		log.Printf("\033[0;31mstep: %v %s\033[0m", i, runner.topic)
+		log.Printf("\033[0;31mstep: %v %s\033[0m", runner.idx, runner.topic)
 		stageOk := stage()
 		if !stageOk {
 			ok = false
@@ -55,9 +60,10 @@ func (runner *Runner) after(stages []Stage) bool {
 }
 
 func (runner *Runner) ensure(stages []Stage) bool {
-	for i, stage := range stages {
+	for _, stage := range stages {
+		runner.idx++
 		runner.topic = funcName(stage)
-		log.Printf("\033[0;31mstep: %v %s\033[0m", i, runner.topic)
+		log.Printf("\033[0;31mstep: %v %s\033[0m", runner.idx, runner.topic)
 		stage()
 	}
 
@@ -88,7 +94,7 @@ func (runner *Runner) execute(main string, args ...string) bool {
 }
 
 func (runner *Runner) executeCmd(cmd string) bool {
-	return runner.execute("/bin/sh", "-c", cmd)
+	return runner.execute("/bin/bash", "-l", "-c", cmd)
 }
 
 func (runner *Runner) wait()  {
@@ -96,6 +102,8 @@ func (runner *Runner) wait()  {
 }
 
 func (runner *Runner) start() {
+	fmt.Printf("\n\n----------------")
+	fmt.Printf("starting build %s\n", runner.id)
 	runner.startTime = time.Now().Unix()
 }
 

@@ -23,7 +23,7 @@ func testJob() *CiJob {
 					OnStartup: []string{"echo 'hello from mysql'"},
 				},
 			},
-			Before: []string{"echo 'pre test'"},
+			Before: []string{"echo 'pre test'", "echo $TEST"},
 			Main: []string{"echo 'test'", "sleep 5"},
 			After: []string{"echo 'after'"},
 			OnSuccess: []string{"echo 'success!'"},

@@ -56,8 +56,11 @@ func (minion *Minion) serve()  {
 }
 
 func (minion *Minion) next() (JobConfig, bool) {
-	conf := JobConfig{}
-	conf.token = minion.token
+	conf := struct {
+		Job 	JobConfig 	`json:"job"`
+	}{}
+
+	conf.Job.token = minion.token
 
 	req := gorequest.New().
 		Post(minion.api + "/minions/jobs").
@@ -71,15 +74,15 @@ func (minion *Minion) next() (JobConfig, bool) {
 	}
 
 	if r.StatusCode != 200 {
-		return conf, false
+		return conf.Job, false
 	}
 
-	err := json.Unmarshal([]byte(body), conf)
+	err := json.Unmarshal([]byte(body), &conf)
 	if err != nil {
 		panic(err)
 	}
 
-	return conf, true
+	return conf.Job, true
 }
 
 func (minion *Minion) save() {
@@ -94,7 +97,7 @@ func (minion *Minion) save() {
 		log.Printf("uploaded file to %s", minion.current.Job.JobId)
 	}
 
-	_, _, errs := gorequest.New().
+	_, body, errs := gorequest.New().
 		Patch(minion.api + "/minions/jobs/" + minion.current.Job.JobId).
 		Param("complete", fmt.Sprintf("%v", true)).
 		Param("cancelled", fmt.Sprintf("%v", minion.current.Status.Cancelled)).
@@ -108,7 +111,7 @@ func (minion *Minion) save() {
 	if len(errs) > 0 {
 		log.Printf("Could not patch updates %s %v", minion.api, errs[0])
 	} else {
-		log.Println("saved!")
+		log.Printf("saved! %s", body)
 	}
 }
 

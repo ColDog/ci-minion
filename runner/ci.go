@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"strings"
+	"encoding/json"
 	"fmt"
 )
 
@@ -12,13 +14,27 @@ type CiJob struct {
 }
 
 func NewJob(job JobConfig) *CiJob {
-	return &CiJob{Job: job}
+	return &CiJob{
+		Job: job,
+		Runner: Runner{
+			finished: make(chan bool, 1),
+			quit: make(chan bool, 1),
+			idx: 0,
+			id: job.JobId,
+			Status: RunStatus{},
+		},
+	}
 }
 
 func (ci *CiJob) Setup() bool {
-	fmt.Printf("\n\n----------------")
-	fmt.Printf("starting build %s\n", ci.Job.JobId)
 	ci.execute("docker", "network", "create", "test-net")
+
+	for _, env := range ci.Job.env() {
+		k := strings.Split(env, "=")[0]
+		v := strings.Replace(env, k + "=", "", -1)
+		os.Setenv(k, v)
+	}
+
 	return true
 }
 
@@ -138,7 +154,7 @@ func (ci *CiJob) After() bool {
 
 func (ci *CiJob) OnSuccess() bool {
 	if !ci.Status.Failed {
-		for _, cmd := range ci.Job.Build.OnFailure {
+		for _, cmd := range ci.Job.Build.OnSuccess {
 			ok := ci.executeCmd(cmd)
 			if !ok {
 				return false
@@ -171,8 +187,11 @@ func (ci *CiJob) Cleanup() bool {
 
 func (ci *CiJob) Run() {
 	ci.start()
+	res, _ := json.MarshalIndent(ci.Job, " ", "  ")
+	fmt.Printf("%s\n", res)
 
 	ci.run([]Stage{
+		ci.Setup,
 		ci.GitSetup,
 		ci.SetupBuildImage,
 		ci.SetupServices,

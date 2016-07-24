@@ -57,7 +57,7 @@ type JobConfig struct {
 }
 
 func (job JobConfig) env() []string {
-	return []string{
+	e := []string{
 		"CI_BUILD_ID=" + job.JobId,
 		"CI_MAIN_CONTAINER=main",
 		"CI_BUILD_FAMILY=" + job.JobFamily,
@@ -68,4 +68,7 @@ func (job JobConfig) env() []string {
 		"SIMPLECI_KEY=minion",
 		"SIMPLECI_SECRET=" + fmt.Sprintf("%s.%v", job.token, job.UserId),
 	}
+
+	e = append(e, job.Build.Env...)
+	return e
 }

@@ -27,8 +27,7 @@ RUN ./ruby.sh
 RUN mkdir -p /opt/ci
 WORKDIR /opt/ci
 
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+ADD runner /usr/local/bin/
 
-COPY runner /usr/local/bin/runner
-
-ENTRYPOINT ["runner"]
+EXPOSE 8000
+CMD ["runner"]

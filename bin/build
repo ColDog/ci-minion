@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 
-env GOOS=linux GOARCH=arm go build -o base/runner github.com/coldog/minion/runner
-
+env GOOS=linux GOARCH=amd64 go build -o base/runner github.com/coldog/minion/runner
+chmod +x base/runner
+docker build -t coldog/simpleci-runner:latest ./base

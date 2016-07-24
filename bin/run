@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+while :
+do
+	echo "running..."
+	docker run -it \
+        -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+        -e SIMLECI_API=http://simpleci:3000 \
+        -e MINION_API=http://minion1:8000 \
+        -e MINION_SECRET=secret \
+        -e S3_BUCKET=simplecistorage \
+        -e S3_REGION=us-west-2 \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --net simpleci-net \
+        --net-alias minion1 \
+        --name minion1 \
+        coldog/simpleci-runner:latest
+    if [ $? -eq 0 ]
+    then
+        echo "continuing execution"
+    else
+        echo "failed to execute, exiting"
+        exit $?
+    fi
+done
