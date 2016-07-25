@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"os"
 	"encoding/json"
-	"io/ioutil"
+	"errors"
 
 	"github.com/urfave/cli"
 	"github.com/parnurzeal/gorequest"
-	"github.com/ghodss/yaml"
 	"gopkg.in/amz.v1/aws"
 	"gopkg.in/amz.v1/s3"
 )
@@ -79,63 +78,9 @@ func (app *App) addCmd(cmd cli.Command)  {
 	app.cli.Commands = append(app.cli.Commands, cmd)
 }
 
-func (app *App) apply() {
-	app.addCmd(cli.Command{
-		Name:    "apply",
-		Aliases: []string{"a"},
-		Usage:   "register the requred builds",
-		Flags: []cli.Flag{
-			cli.StringFlag{
-				Name: "build-file, b",
-				Value: "builds.yml",
-				Usage: "specify build file to apply",
-			},
-		},
-		Action:  func(c *cli.Context) error {
-			b := c.String("build-file")
-			res := make(map[string] map[string] interface{})
-
-			data, err := ioutil.ReadFile(b)
-			app.handleErr(err)
-
-			err = yaml.Unmarshal([]byte(data), &res)
-			app.handleErr(err)
-
-			for key, config := range res {
-				config["name"] = key
-				fmt.Printf("creating job definition %s\n", key)
-				err := app.post("/users/" + app.User + "/job_definitions", config, nil)
-				app.handleErr(err)
-			}
-
-			return nil
-		},
-	})
-}
-
-func (app *App) provisionSecrets() {
-	app.addCmd(cli.Command{
-		Name:    "provision-secrets",
-		Usage:   "load in secret environment variables",
-		Action:  func(c *cli.Context) error {
-			res := make(map[string] []struct{
-				Key 	string 	`json:"key"`
-				Value 	string 	`json:"value"`
-			})
-
-			err := app.get("/users/" + app.User + "/secrets", nil, &res)
-			app.handleErr(err)
-
-			for _, secret := range res["secrets"] {
-				fmt.Printf("export %s=%s\n", secret.Key, secret.Value)
-			}
-			return nil
-		},
-	})
-}
-
-func (app *App) post(path string, params map[string] interface{}, res interface{}) error {
+func (app *App) post(path string, params interface{}, res interface{}) error {
 	data := app.parseReq(params)
+
 	resp, body, errs := gorequest.New().Post(app.SimpleCiApi + "/api" + path).
 		Set("Accepts", "application/json").
 		Set("Authorization", app.AuthHeader).
@@ -145,6 +90,17 @@ func (app *App) post(path string, params map[string] interface{}, res interface{
 	return app.handleHttp(resp, body, errs, res)
 }
 
+func (app *App) patch(path string, params interface{}, res interface{}) error {
+	data := app.parseReq(params)
+
+	resp, body, errs := gorequest.New().Patch(app.SimpleCiApi + "/api" + path).
+		Set("Accepts", "application/json").
+		Set("Authorization", app.AuthHeader).
+		Send(data).
+		End()
+
+	return app.handleHttp(resp, body, errs, res)
+}
 
 func (app *App) get(path string, params map[string] interface{}, res interface{}) error {
 	req := gorequest.New().Get(app.SimpleCiApi + "/api" + path).
