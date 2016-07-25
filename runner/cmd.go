@@ -42,6 +42,8 @@ func execute(quit chan bool, output chan string, main string, args ...string) (e
 	stderr, err := cmd.StderrPipe()
 	err = cmd.Start()
 	if err != nil {
+		fmt.Printf("	> err: %v\n", err.Error())
+		output <- fmt.Sprintf("err: %s", err.Error())
 		t2 := time.Now().Unix()
 		return err, t2 - t1
 	}
@@ -65,6 +67,11 @@ func execute(quit chan bool, output chan string, main string, args ...string) (e
 	}()
 
 	err = cmd.Wait()
+	if err != nil {
+		fmt.Printf("	> err: %v\n", err.Error())
+		output <- fmt.Sprintf("err: %s", err.Error())
+	}
+
 	done <- true
 	t2 := time.Now().Unix()
 	return err, t2 - t1

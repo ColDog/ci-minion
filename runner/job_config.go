@@ -48,7 +48,7 @@ type Build struct  {
 }
 
 type JobConfig struct {
-	JobId 		string			`json:"job_id"`
+	JobId 		string			`json:"key"`
 	JobFamily	string			`json:"job_family"`
 	UserId		int			`json:"user_id"`
 	Build 		Build			`json:"build"`
