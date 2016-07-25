@@ -48,10 +48,10 @@ func (app *App) configure() {
 		cli.StringFlag{Name: "user, u", Value: "me", EnvVar: "MINION_USER"},
 		cli.StringFlag{Name: "secret, s", EnvVar: "SIMPLECI_SECRET"},
 		cli.StringFlag{Name: "key, k", EnvVar: "SIMPLECI_KEY"},
-		cli.StringFlag{Name: "minion-api", EnvVar: "MINION_API"},
-		cli.StringFlag{Name: "simpleci-api", EnvVar: "SIMPLECI_API"},
-		cli.StringFlag{Name: "s3-bucket", EnvVar: "MINION_S3_BUCKET"},
-		cli.StringFlag{Name: "s3-region", EnvVar: "MINION_S3_REGION"},
+		cli.StringFlag{Name: "minion-api", Value: "http://localhost:8000", EnvVar: "MINION_API"},
+		cli.StringFlag{Name: "simpleci-api", Value: "http://localhost:3000", EnvVar: "SIMPLECI_API"},
+		cli.StringFlag{Name: "s3-bucket", Value: "simplecistorage", EnvVar: "MINION_S3_BUCKET"},
+		cli.StringFlag{Name: "s3-region", Value: "us-west-2", EnvVar: "MINION_S3_REGION"},
 		cli.StringFlag{Name: "aws-access", EnvVar: "MINION_AWS_ACCESS_KEY"},
 		cli.StringFlag{Name: "aws-secret", EnvVar: "MINION_AWS_SECRET_KEY"},
 	}
@@ -115,7 +115,7 @@ func (app *App) get(path string, params map[string] interface{}, res interface{}
 	return app.handleHttp(resp, body, errs, res)
 }
 
-func (app *App) parseReq(params map[string] interface{}) string {
+func (app *App) parseReq(params interface{}) string {
 	var data []byte
 	var err error
 	if params != nil {

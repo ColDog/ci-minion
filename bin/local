@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 source .env
-go install github.com/coldog/minion/runner && $GOPATH/bin/runner
+go install github.com/coldog/minion && $GOPATH/bin/minion

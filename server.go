@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/go-amz/amz/s3"
+	"gopkg.in/amz.v1/s3"
 )
 
 type Minion struct {
