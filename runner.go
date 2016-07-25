@@ -94,8 +94,7 @@ func (runner *Runner) execute(main string, args ...string) bool {
 }
 
 func (runner *Runner) executeCmd(cmd string) bool {
-	parts := strings.Fields(cmd)
-	return runner.execute(parts[0], parts[1:]...)
+	return runner.execute("/bin/bash", "-c", cmd)
 }
 
 func (runner *Runner) wait()  {

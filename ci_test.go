@@ -24,7 +24,12 @@ func testJob() *CiJob {
 				},
 			},
 			Before: []string{"echo 'pre test'", "echo $TEST"},
-			Main: []string{"echo 'test'", "export THINGS=true", "echo $THINGS", "sleep 5"},
+			Main: []string{
+				"echo 'test'",
+				"env TESTENV=testing123",
+				"echo ${TESTENV}",
+				"sleep 5",
+			},
 			After: []string{"echo 'after'"},
 			OnSuccess: []string{"echo 'success!'"},
 			OnFailure: []string{"echo 'failure :('"},
