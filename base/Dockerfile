@@ -30,8 +30,6 @@ WORKDIR /opt/ci
 ADD runner /usr/local/bin/
 
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh && sed -i 's/^mesg n$/tty -s \&\& mesg n/g' /root/.profile
-ENV PATH /usr/local/rvm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
-RUN /usr/local/rvm/bin/rvm requirements
 
 EXPOSE 8000
-CMD ["runner"]
+CMD ["simpleci", "server"]

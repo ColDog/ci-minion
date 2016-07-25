@@ -101,6 +101,7 @@ func (minion *Minion) run() {
 
 		minion.save()
 
+		// this allows the scheduler to build up a new fresh image upon completion
 		if minion.exitPostBuild {
 			return
 		}
