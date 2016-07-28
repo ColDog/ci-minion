@@ -71,6 +71,10 @@ func (runner *Runner) ensure(stages []Stage) bool {
 }
 
 func (runner *Runner) execute(main string, args ...string) bool {
+	return runner.executeIn("", main, args...)
+}
+
+func (runner *Runner) executeIn(dir string, main string, args ...string) bool {
 	output := make(chan string, 10)
 
 	res := &CommandResult{
@@ -87,7 +91,7 @@ func (runner *Runner) execute(main string, args ...string) bool {
 		}
 	}()
 
-	err, t := execute(runner.quit, output, main, args...)
+	err, t := execute(runner.quit, output, dir, main, args...)
 	res.Error = err
 	res.Time = t
 	return res.Error == nil

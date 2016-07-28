@@ -56,6 +56,7 @@ func (ci *CiJob) GitSetup() bool {
 }
 
 func (ci *CiJob) SetupBuildImage() bool {
+
 	image := ""
 	if ci.Job.Build.BaseBuild != "" {
 		ok := ci.execute("docker", "build", "-t", ci.Job.JobId, ci.Job.Build.BaseBuild)
@@ -183,6 +184,23 @@ func (ci *CiJob) Cleanup() bool {
 	}
 	ci.execute("docker", "network", "rm", "test-net")
 	return true
+}
+
+func (ci *CiJob) Sandbox() {
+	ci.start()
+	res, _ := json.MarshalIndent(ci.Job, " ", "  ")
+	fmt.Printf("%s\n", res)
+
+	ci.run([]Stage{
+		ci.Setup,
+		ci.GitSetup,
+		ci.SetupBuildImage,
+		ci.SetupServices,
+		ci.Before,
+		ci.Main,
+	})
+
+	ci.finish()
 }
 
 func (ci *CiJob) Run() {

@@ -19,11 +19,15 @@ type CommandResult struct {
 	Error 		error		`json:"error"`
 }
 
-func execute(quit chan bool, output chan string, main string, args ...string) (error, int64) {
+func execute(quit chan bool, output chan string, dir string, main string, args ...string) (error, int64) {
 	t1 := time.Now().Unix()
 
 	done := make(chan bool, 1)
 	cmd := exec.Command(main, args...)
+
+	if dir != "" {
+		cmd.Dir = dir
+	}
 
 	log.Printf("exec: %s %s", main, strings.Join(args, " "))
 
