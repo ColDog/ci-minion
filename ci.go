@@ -58,12 +58,14 @@ func (ci *CiJob) GitSetup() bool {
 func (ci *CiJob) SetupBuildImage() bool {
 
 	image := ""
+	isImage := true
 	if ci.Job.Build.BaseBuild != "" {
-		ok := ci.execute("docker", "build", "-t", ci.Job.JobId, ci.Job.Build.BaseBuild)
+		ok := ci.executeIn(ci.folder, "docker", "build", "-t", ci.Job.JobId, ci.Job.Build.BaseBuild)
 		if !ok {
 			return false
 		}
 		image = ci.Job.JobId
+		isImage = false
 	} else if ci.Job.Build.BaseImage != "" {
 		ok := ci.execute("docker", "pull", ci.Job.Build.BaseImage)
 		if !ok {
@@ -76,7 +78,6 @@ func (ci *CiJob) SetupBuildImage() bool {
 		c := Docker{
 			Image: image,
 			Env: ci.Job.env(),
-			WorkDir: "/opt/ci/" + ci.Job.Repo.Project,
 			Net: "test-net",
 			NetAlias: "main",
 			Name: "main",
@@ -84,12 +85,19 @@ func (ci *CiJob) SetupBuildImage() bool {
 			FlagD: true,
 		}
 
+		if isImage {
+			c.WorkDir = "/opt/ci/" + ci.Job.Repo.Project
+		}
+
 		ci.execute("docker", "rm", "-f", c.Name)
 		ok := ci.execute("docker", c.start()...)
 		if !ok {
 			return false
 		}
-		ci.execute("docker", "cp", ci.folder, "main:/opt/ci")
+
+		if isImage {
+			ci.execute("docker", "cp", ci.folder, "main:/opt/ci")
+		}
 	}
 
 	return true
@@ -98,6 +106,7 @@ func (ci *CiJob) SetupBuildImage() bool {
 
 func (ci *CiJob) SetupServices() bool {
 	for name, service := range ci.Job.Build.Services {
+		ci.execute("docker", "rm", "-f", name)
 		ok := ci.execute("docker", "pull", service.Image)
 		if !ok {
 			return false
@@ -176,31 +185,13 @@ func (ci *CiJob) OnFailure() bool {
 
 func (ci *CiJob) Cleanup() bool {
 	ci.execute("rm", "-rf", ci.folder)
-	ci.execute("docker", "stop", "main")
-	ci.execute("docker", "rm", "-f", "main")
+	//ci.execute("docker", "stop", "main")
+	//ci.execute("docker", "rm", "-f", "main")
 	for name, _ := range ci.Job.Build.Services {
 		ci.execute("docker", "stop", name)
 		ci.execute("docker", "rm", "-f", name)
 	}
-	ci.execute("docker", "network", "rm", "test-net")
 	return true
-}
-
-func (ci *CiJob) Sandbox() {
-	ci.start()
-	res, _ := json.MarshalIndent(ci.Job, " ", "  ")
-	fmt.Printf("%s\n", res)
-
-	ci.run([]Stage{
-		ci.Setup,
-		ci.GitSetup,
-		ci.SetupBuildImage,
-		ci.SetupServices,
-		ci.Before,
-		ci.Main,
-	})
-
-	ci.finish()
 }
 
 func (ci *CiJob) Run() {
@@ -211,8 +202,8 @@ func (ci *CiJob) Run() {
 	ci.run([]Stage{
 		ci.Setup,
 		ci.GitSetup,
-		ci.SetupBuildImage,
 		ci.SetupServices,
+		ci.SetupBuildImage,
 		ci.Before,
 		ci.Main,
 	})

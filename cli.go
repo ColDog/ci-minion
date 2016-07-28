@@ -10,10 +10,13 @@ import (
 	"github.com/parnurzeal/gorequest"
 	"gopkg.in/amz.v1/aws"
 	"gopkg.in/amz.v1/s3"
+	"log"
 )
 
 type App struct {
 	SimpleCiApi	string
+	SimpleCiSecret	string
+	SimpleCiKey	string
 	MinionApi	string
 	AuthHeader 	string
 	S3Region	string
@@ -46,8 +49,8 @@ func (app *App) configS3() {
 func (app *App) configure() {
 	app.cli.Flags = []cli.Flag{
 		cli.StringFlag{Name: "user, u", Value: "me", EnvVar: "MINION_USER"},
-		cli.StringFlag{Name: "secret, s", EnvVar: "SIMPLECI_SECRET"},
-		cli.StringFlag{Name: "key, k", EnvVar: "SIMPLECI_KEY"},
+		cli.StringFlag{Name: "secret, s", Value: "secret", EnvVar: "SIMPLECI_SECRET"},
+		cli.StringFlag{Name: "key, k", Value: "minion", EnvVar: "SIMPLECI_KEY"},
 		cli.StringFlag{Name: "minion-api", Value: "http://localhost:8000", EnvVar: "MINION_API"},
 		cli.StringFlag{Name: "simpleci-api", Value: "http://localhost:3000", EnvVar: "SIMPLECI_API"},
 		cli.StringFlag{Name: "s3-bucket", Value: "simplecistorage", EnvVar: "MINION_S3_BUCKET"},
@@ -58,7 +61,8 @@ func (app *App) configure() {
 
 	app.cli.Before = func(c *cli.Context) error {
 		app.User = c.GlobalString("user")
-		app.AuthHeader = c.GlobalString("key") + ":" + c.GlobalString("secret")
+		app.SimpleCiSecret = c.GlobalString("secret")
+		app.SimpleCiKey = c.GlobalString("key")
 		app.MinionApi = c.GlobalString("minion-api")
 		app.SimpleCiApi = c.GlobalString("simpleci-api")
 		app.S3Region = c.GlobalString("s3-region")
@@ -66,12 +70,22 @@ func (app *App) configure() {
 		app.AwsAccess = c.GlobalString("aws-access")
 		app.AwsSecret = c.GlobalString("aws-secret")
 
+		app.AuthHeader = app.SimpleCiKey + ":" + app.SimpleCiSecret
+
 		app.configS3()
+
+		// good for debugging config...
+		//data, _ := json.MarshalIndent(app, " ", "  ")
+		//fmt.Printf("%s\n", data)
 
 		return nil
 	}
 
 
+}
+
+func (app *App) setAuth(auth string) {
+	app.AuthHeader = auth
 }
 
 func (app *App) addCmd(cmd cli.Command)  {
@@ -81,7 +95,9 @@ func (app *App) addCmd(cmd cli.Command)  {
 func (app *App) post(path string, params interface{}, res interface{}) error {
 	data := app.parseReq(params)
 
-	resp, body, errs := gorequest.New().Post(app.SimpleCiApi + "/api" + path).
+	log.Printf("auth: %s", app.AuthHeader)
+
+	resp, body, errs := gorequest.New().Post(app.SimpleCiApi + path).
 		Set("Accepts", "application/json").
 		Set("Authorization", app.AuthHeader).
 		Send(data).
@@ -93,7 +109,7 @@ func (app *App) post(path string, params interface{}, res interface{}) error {
 func (app *App) patch(path string, params interface{}, res interface{}) error {
 	data := app.parseReq(params)
 
-	resp, body, errs := gorequest.New().Patch(app.SimpleCiApi + "/api" + path).
+	resp, body, errs := gorequest.New().Patch(app.SimpleCiApi + path).
 		Set("Accepts", "application/json").
 		Set("Authorization", app.AuthHeader).
 		Send(data).
@@ -103,7 +119,7 @@ func (app *App) patch(path string, params interface{}, res interface{}) error {
 }
 
 func (app *App) get(path string, params map[string] interface{}, res interface{}) error {
-	req := gorequest.New().Get(app.SimpleCiApi + "/api" + path).
+	req := gorequest.New().Get(app.SimpleCiApi + path).
 		Set("Accepts", "application/json").
 		Set("Authorization", app.AuthHeader)
 

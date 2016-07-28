@@ -42,7 +42,7 @@ func main() {
 			for key, config := range res {
 				config["name"] = key
 				fmt.Printf("creating job definition %s\n", key)
-				err := app.post("/users/" + app.User + "/job_definitions", config, nil)
+				err := app.post("/api/users/" + app.User + "/job_definitions", config, nil)
 				app.handleErr(err)
 			}
 
@@ -88,7 +88,7 @@ func main() {
 				Value 	string 	`json:"value"`
 			})
 
-			err := app.get("/users/" + app.User + "/secrets", nil, &res)
+			err := app.get("/api/users/" + app.User + "/secrets", nil, &res)
 			app.handleErr(err)
 
 			for _, secret := range res["secrets"] {
@@ -113,7 +113,7 @@ func main() {
 				app.handleErr(err)
 			}
 
-			err := app.post("/users/" + app.User + "/events", map[string] map[string] interface{} {
+			err := app.post("/api/users/" + app.User + "/events", map[string] map[string] interface{} {
 				"event": map[string] interface{} {
 					"name": c.Args().First(),
 					"payload": payload,

@@ -27,7 +27,7 @@ RUN ./ruby.sh
 RUN mkdir -p /opt/ci
 WORKDIR /opt/ci
 
-ADD runner /usr/local/bin/
+ADD simpleci /usr/local/bin/
 
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh && sed -i 's/^mesg n$/tty -s \&\& mesg n/g' /root/.profile
 

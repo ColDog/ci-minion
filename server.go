@@ -44,12 +44,32 @@ func (minion *Minion) next() (JobConfig, bool) {
 		Job 	JobConfig 	`json:"job"`
 	}{}
 
+	minion.app.setAuth("minion:" + minion.app.SimpleCiSecret)
+	conf.Job.token = minion.app.SimpleCiSecret
+
 	err := minion.app.post("/minions/jobs", map[string] string{ "worker": minion.app.MinionApi}, &conf)
 	if err != nil {
-		panic(err)
-	}
+		return conf.Job, false
+	} else {
+		auth := fmt.Sprintf("minion:%s.%v", minion.app.SimpleCiSecret, conf.Job.UserId)
+		minion.app.setAuth(auth)
 
-	return conf.Job, true
+		res := make(map[string] []struct{
+			Key 	string 	`json:"key"`
+			Value 	string 	`json:"value"`
+		})
+
+		err := minion.app.get("/api/users/me/secrets", nil, &res)
+		if err != nil {
+			panic(err)
+		}
+
+		for _, sec := range res["secrets"] {
+			conf.Job.Build.Env = append(conf.Job.Build.Env, fmt.Sprintf("%s=%s", sec.Key, sec.Value))
+		}
+
+		return conf.Job, true
+	}
 }
 
 func (minion *Minion) save() {
@@ -64,7 +84,8 @@ func (minion *Minion) save() {
 		log.Printf("uploaded file to %s", minion.current.Job.JobId)
 	}
 
-	err = minion.app.post("/minions/jobs", map[string] interface{} {
+	minion.app.setAuth("minion:" + minion.app.SimpleCiSecret)
+	err = minion.app.patch("/minions/jobs/" + minion.current.Job.JobId, map[string] interface{} {
 		"complete": true,
 		"cancelled": minion.current.Status.Cancelled,
 		"failed": minion.current.Status.Failed,

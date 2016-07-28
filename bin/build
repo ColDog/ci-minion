@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+go install github.com/coldog/minion
 env GOOS=linux GOARCH=amd64 go build -o base/simpleci github.com/coldog/minion
 chmod +x base/simpleci
 docker build -t coldog/simpleci-runner:latest ./base
