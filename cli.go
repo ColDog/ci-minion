@@ -17,6 +17,7 @@ type App struct {
 	SimpleCiApi	string
 	SimpleCiSecret	string
 	SimpleCiKey	string
+	ListenPort 	string
 	MinionApi	string
 	AuthHeader 	string
 	S3Region	string
@@ -51,7 +52,7 @@ func (app *App) configure() {
 		cli.StringFlag{Name: "user, u", Value: "me", EnvVar: "MINION_USER"},
 		cli.StringFlag{Name: "secret, s", Value: "secret", EnvVar: "SIMPLECI_SECRET"},
 		cli.StringFlag{Name: "key, k", Value: "minion", EnvVar: "SIMPLECI_KEY"},
-		cli.StringFlag{Name: "minion-api", Value: "http://localhost:8000", EnvVar: "MINION_API"},
+		cli.StringFlag{Name: "port, p", Value: "8000", EnvVar: "PORT"},
 		cli.StringFlag{Name: "simpleci-api", Value: "http://localhost:3000", EnvVar: "SIMPLECI_API"},
 		cli.StringFlag{Name: "s3-bucket", Value: "simplecistorage", EnvVar: "MINION_S3_BUCKET"},
 		cli.StringFlag{Name: "s3-region", Value: "us-west-2", EnvVar: "MINION_S3_REGION"},
@@ -63,14 +64,18 @@ func (app *App) configure() {
 		app.User = c.GlobalString("user")
 		app.SimpleCiSecret = c.GlobalString("secret")
 		app.SimpleCiKey = c.GlobalString("key")
-		app.MinionApi = c.GlobalString("minion-api")
+		app.ListenPort = c.GlobalString("port")
 		app.SimpleCiApi = c.GlobalString("simpleci-api")
 		app.S3Region = c.GlobalString("s3-region")
 		app.S3Bucket = c.GlobalString("s3-bucket")
 		app.AwsAccess = c.GlobalString("aws-access")
 		app.AwsSecret = c.GlobalString("aws-secret")
 
+		ip, err := ExternalIP()
+		app.handleErr(err)
+
 		app.AuthHeader = app.SimpleCiKey + ":" + app.SimpleCiSecret
+		app.MinionApi = ip + ":" + app.ListenPort
 
 		app.configS3()
 

@@ -29,7 +29,7 @@ func (minion *Minion) viewCurrentState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (minion *Minion) serve()  {
-	spl := strings.Split(minion.app.MinionApi, ":")
+	spl := strings.Split(minion.app.ListenPort, ":")
 	port := spl[len(spl) - 1]
 
 	log.Printf("serving on %s", port)
@@ -47,7 +47,7 @@ func (minion *Minion) next() (JobConfig, bool) {
 	minion.app.setAuth("minion:" + minion.app.SimpleCiSecret)
 	conf.Job.token = minion.app.SimpleCiSecret
 
-	err := minion.app.post("/minions/jobs", map[string] string{ "worker": minion.app.MinionApi}, &conf)
+	err := minion.app.post("/minions/jobs", map[string] string{ "worker": minion.app.MinionApi }, &conf)
 	if err != nil {
 		return conf.Job, false
 	} else {
@@ -133,4 +133,3 @@ func (server *Minion) Start() {
 	go server.serve()
 	server.run()
 }
-
