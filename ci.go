@@ -184,9 +184,11 @@ func (ci *CiJob) OnFailure() bool {
 }
 
 func (ci *CiJob) Cleanup() bool {
+	// remove everything from docker that isn't this image
+
 	ci.execute("rm", "-rf", ci.folder)
-	//ci.execute("docker", "stop", "main")
-	//ci.execute("docker", "rm", "-f", "main")
+	ci.execute("docker", "stop", "main")
+	ci.execute("docker", "rm", "-f", "main")
 	for name, _ := range ci.Job.Build.Services {
 		ci.execute("docker", "stop", name)
 		ci.execute("docker", "rm", "-f", name)

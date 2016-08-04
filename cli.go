@@ -53,6 +53,7 @@ func (app *App) configure() {
 		cli.StringFlag{Name: "secret, s", Value: "secret", EnvVar: "SIMPLECI_SECRET"},
 		cli.StringFlag{Name: "key, k", Value: "minion", EnvVar: "SIMPLECI_KEY"},
 		cli.StringFlag{Name: "port, p", Value: "8000", EnvVar: "PORT"},
+		cli.StringFlag{Name: "addr, a", EnvVar: "ADDR"},
 		cli.StringFlag{Name: "simpleci-api", Value: "http://localhost:3000", EnvVar: "SIMPLECI_API"},
 		cli.StringFlag{Name: "s3-bucket", Value: "simplecistorage", EnvVar: "MINION_S3_BUCKET"},
 		cli.StringFlag{Name: "s3-region", Value: "us-west-2", EnvVar: "MINION_S3_REGION"},
@@ -71,11 +72,17 @@ func (app *App) configure() {
 		app.AwsAccess = c.GlobalString("aws-access")
 		app.AwsSecret = c.GlobalString("aws-secret")
 
-		ip, err := ExternalIP()
-		app.handleErr(err)
+		var ip string
+		if c.GlobalString("addr") != "" {
+			ip = c.GlobalString("addr")
+		} else {
+			var err error
+			ip, err = ExternalIP()
+			app.handleErr(err)
+		}
 
 		app.AuthHeader = app.SimpleCiKey + ":" + app.SimpleCiSecret
-		app.MinionApi = ip + ":" + app.ListenPort
+		app.MinionApi = "http://" + ip + ":" + app.ListenPort
 
 		app.configS3()
 

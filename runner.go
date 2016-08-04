@@ -32,7 +32,7 @@ func (runner *Runner) run(stages []Stage) bool {
 		if !ok {
 			runner.Status.Failed = true
 			last := runner.Status.Output[len(runner.Status.Output) - 1]
-			runner.Status.Failure = strings.Join(last.Output, "\n")
+			runner.Status.Failure = last.Args
 			return false
 		}
 	}
